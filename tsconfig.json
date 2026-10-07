@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "types": ["bun"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@web/*": ["./src/web/*"],
+      "@server/*": ["./src/server/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts", "drizzle.config.ts"]
+}
