@@ -31,24 +31,24 @@ export function ChannelView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col" key={channel.id}>
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4">
-        <Hash className="size-4 text-primary" />
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-accent/10 bg-card/80 px-4 backdrop-blur">
+        <Hash className="size-4 text-accent" />
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-sm font-semibold sm:text-base">{channel.name}</h1>
+          <h1 className="text-glow truncate font-display text-sm font-semibold text-gold-bright sm:text-base">{channel.name}</h1>
           <p className="hidden text-xs text-muted-foreground sm:block">Chat persistente e mesa de voz</p>
         </div>
         {!inVoice && (
-          <Button size="sm" onClick={enterVoice}>
-            <Video className="size-4" /> Entrar na voz
+          <Button variant="gold" size="sm" onClick={enterVoice}>
+            <Video className="size-4" /> Entrar na sala de voz
           </Button>
         )}
         <Button
-          variant="outline"
+          variant="outline-gold"
           size="sm"
           className="hidden sm:inline-flex"
           onClick={() => window.open(`/stream/${channel.id}`, "mesa-stream", "popup,width=1280,height=720")}
         >
-          <MonitorUp className="size-4" /> Abrir modo TV
+          <MonitorUp className="size-4" /> Abrir modo streaming
         </Button>
       </header>
 

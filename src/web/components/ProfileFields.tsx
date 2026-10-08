@@ -45,7 +45,7 @@ export function ProfileFields({
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="group relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-sm font-semibold"
+          className="group relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-sm font-semibold ring-1 ring-accent/25 transition-all duration-200 hover:ring-accent/60 hover:shadow-[var(--shadow-glow-gold)]"
           aria-label="Escolher foto"
         >
           {preview ? (
@@ -53,11 +53,11 @@ export function ProfileFields({
           ) : (
             initials(value.name) || "?"
           )}
-          <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 backdrop-blur-[1px] transition-all duration-200 group-hover:opacity-100">
             {processing ? (
-              <Loader2 className="size-5 animate-spin text-white" />
+              <Loader2 className="size-5 animate-spin text-gold-bright" />
             ) : (
-              <Camera className="size-5 text-white" />
+              <Camera className="size-5 text-gold-bright drop-shadow-[0_0_8px_var(--color-accent)]" />
             )}
           </span>
         </button>
