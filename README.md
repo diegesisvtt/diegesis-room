@@ -2,7 +2,7 @@
 
 Sala de conferência para RPG de mesa, híbrida (jogadores presenciais + remotos), com recursos
 que unem o melhor do **Zoom** (vídeo, compartilhamento de tela, câmera dedicada ao mapa físico,
-sala de espera, modo TV) e do **Discord** (canais de texto persistentes, mesas de voz, convites por link).
+sala de espera, modo streaming) e do **Discord** (canais de texto persistentes, mesas de voz, convites por link).
 
 > Nome inspirado em *diegesis* — o mundo ficcional narrado na mesa.
 
@@ -12,7 +12,7 @@ sala de espera, modo TV) e do **Discord** (canais de texto persistentes, mesas d
 - **Modo híbrido**: câmera dedicada apontada para a mesa física (a "câmera do mapa") no palco
   principal + jogadores remotos na faixa lateral.
 - **Compartilhamento de tela** (PC) como tile central fixável — ideal para mapas digitais.
-- **Modo TV** (`/stream/:channelId`): exibe os jogadores remotos em tela cheia para a televisão
+- **Modo streaming** (`/stream/:channelId`): exibe os jogadores remotos em tela cheia para a televisão
   da mesa, com indicador de quem está falando. Token de audiência (só assiste, não publica).
 - **Discord-like**: campanhas, canais de texto com histórico persistente (WebSocket) e canais de voz.
 - **Convites por link** (sem conta): jogador entra pelo nome; anfitrião entra direto.
@@ -58,7 +58,7 @@ src/
         ├── chat/           # canal de texto persistente
         ├── meeting/        # palco de vídeo, controles, participantes, dispositivos
         ├── dice/           # rolagens
-        ├── tv-mode/        # página /stream para a TV
+        ├── tv-mode/        # página /stream para o modo streaming
         └── settings/       # config LiveKit na UI
 ```
 
@@ -116,7 +116,7 @@ Crie um projeto em <https://cloud.livekit.io> e cole a URL (`wss://...`) e as cr
    liga a "câmera do mapa" e, se quiser, compartilha a tela.
 2. **Jogadores remotos** abrem o link de convite, informam o nome e entram na sala de espera.
 3. **Anfitrião** admite os jogadores (painel Participantes).
-4. **TV da mesa**: anfitrião clica em **Abrir modo TV** (ou abre
+4. **Streaming da mesa**: anfitrião clica em **Abrir modo streaming** (ou abre
    `http://<servidor>/stream/<channelId>` direto no navegador da TV) para exibir os jogadores
    remotos em tela cheia.
 
