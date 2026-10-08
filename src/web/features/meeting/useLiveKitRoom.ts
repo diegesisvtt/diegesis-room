@@ -3,6 +3,7 @@ import { createLocalVideoTrack, Room, RoomEvent, Track, VideoPresets } from "liv
 import type { LocalVideoTrack, RemoteVideoTrack } from "livekit-client";
 import { api, type TokenResponse } from "@/web/lib/api";
 import { loadSession, peekProfileToken } from "@/web/lib/session";
+import { setPreferences, shareQualityPresets, usePreferences, type ShareQuality } from "@/web/lib/preferences";
 
 export type RoomStatus = "idle" | "connecting" | "live" | "error";
 
@@ -46,6 +47,8 @@ const qualityPresets: Record<CameraQuality, { preset: (typeof VideoPresets)[keyo
 };
 
 export type HostCamera = { id: string; name: string; deviceId: string; enabled: boolean; quality?: CameraQuality };
+
+export type { ShareQuality } from "@/web/lib/preferences";
 
 export type Signal = { hand?: boolean; reaction?: string; expires?: number };
 
@@ -101,6 +104,26 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const preferences = usePreferences();
+  const shareQuality = preferences.shareQuality;
+  const shareQualityRef = useRef(shareQuality);
+  shareQualityRef.current = shareQuality;
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
+
+  function micOptions() {
+    const prefs = preferencesRef.current;
+    return {
+      echoCancellation: prefs.echoCancellation,
+      noiseSuppression: prefs.noiseSuppression,
+      autoGainControl: prefs.autoGainControl,
+      channelCount: prefs.stereo ? 2 : 1,
+    };
+  }
+
+  function cameraOptions() {
+    return { resolution: qualityPresets[preferencesRef.current.cameraQuality].preset.resolution };
+  }
   const [signals, setSignals] = useState<Record<string, Signal>>({});
   const [speakers, setSpeakers] = useState<string[]>([]);
   const [spotlight, setSpotlightState] = useState<string | null>(() => (role === "host" ? loadSpotlight(storageKeys.spotlight) : null));
@@ -240,7 +263,15 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
         audience,
         profileToken: session ? peekProfileToken(session.campaignId) : undefined,
       });
-      const room = new Room({ dynacast: true });
+      const room = new Room({
+        dynacast: true,
+        publishDefaults: {
+          videoCodec: "av1",
+          backupCodec: true,
+          screenShareEncoding: { maxBitrate: 4_000_000, maxFramerate: 30 },
+          degradationPreference: "maintain-resolution",
+        },
+      });
       const sync = () => {
         syncGuests(room);
         syncLocal(room);
@@ -269,11 +300,11 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
       await room.connect(credentials.url, credentials.token);
       roomRef.current = room;
       localIdentityRef.current = room.localParticipant.identity;
-      await room.localParticipant.setMicrophoneEnabled(micOn);
+      await room.localParticipant.setMicrophoneEnabled(micOn, micOptions());
       if (role === "host") {
         broadcastCameras(hostCamerasRef.current, spotlightRef.current);
       } else {
-        if (cameraOn) await room.localParticipant.setCameraEnabled(true);
+        if (cameraOn) await room.localParticipant.setCameraEnabled(true, cameraOptions());
         void room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({ type: "cameras-request" })), {
           reliable: true,
           topic: TOPIC,
@@ -400,7 +431,7 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
   // ---- Actions (shared) ----
   const toggleMic = useCallback(async () => {
     const next = !micOn;
-    await roomRef.current?.localParticipant.setMicrophoneEnabled(next);
+    await roomRef.current?.localParticipant.setMicrophoneEnabled(next, micOptions());
     setMicOn(next);
   }, [micOn]);
 
@@ -408,16 +439,30 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
     const next = !cameraOn;
     const room = roomRef.current;
     if (room) {
-      await room.localParticipant.setCameraEnabled(next);
+      await room.localParticipant.setCameraEnabled(next, cameraOptions());
     }
     setCameraOn(next);
   }, [cameraOn]);
+
+  const setShareQuality = useCallback((quality: ShareQuality) => {
+    setPreferences({ shareQuality: quality });
+  }, []);
 
   const toggleShare = useCallback(async () => {
     const next = !sharing;
     const room = roomRef.current;
     if (room) {
-      await room.localParticipant.setScreenShareEnabled(next, { audio: true });
+      const preset = shareQualityPresets[shareQualityRef.current];
+      // Aplicado no próximo compartilhamento: trocar qualidade no meio reabriria o seletor do navegador.
+      room.options.publishDefaults = {
+        ...room.options.publishDefaults,
+        screenShareEncoding: { maxBitrate: preset.maxBitrate, maxFramerate: preset.maxFramerate },
+      };
+      await room.localParticipant.setScreenShareEnabled(next, {
+        audio: true,
+        contentHint: preferencesRef.current.contentHint,
+        resolution: preset.resolution,
+      });
     }
     setSharing(next);
     setLocalScreenTrack((room?.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track as LocalVideoTrack | undefined) ?? null);
@@ -451,6 +496,7 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
     micOn,
     cameraOn: anyCameraOn,
     sharing,
+    shareQuality,
     signals,
     speakers,
     spotlight,
@@ -461,6 +507,7 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
     toggleMic,
     toggleCamera,
     toggleShare,
+    setShareQuality,
     sendSignal,
     addCamera,
     removeCamera,

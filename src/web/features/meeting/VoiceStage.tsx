@@ -148,6 +148,8 @@ export function VoiceStage({
         cameras={meeting.hostCameras}
         cameraErrors={meeting.cameraErrors}
         spotlight={meeting.spotlight}
+        shareQuality={meeting.shareQuality}
+        onShareQualityChange={meeting.setShareQuality}
         onAddCamera={(name, deviceId) => void meeting.addCamera(name, deviceId)}
         onRemoveCamera={meeting.removeCamera}
         onToggleCamera={(id) => void meeting.toggleHostCamera(id)}

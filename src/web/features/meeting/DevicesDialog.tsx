@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Room } from "livekit-client";
 import { Plus, Settings, Star, Trash2, Volume2 } from "lucide-react";
 import { motion } from "framer-motion";
-import type { CameraQuality, HostCamera } from "./useLiveKitRoom";
+import type { CameraQuality, HostCamera, ShareQuality } from "./useLiveKitRoom";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/web/components/ui/dialog";
@@ -39,6 +39,8 @@ export function DevicesDialog({
   cameras = [],
   cameraErrors = {},
   spotlight = null,
+  shareQuality,
+  onShareQualityChange,
   onAddCamera,
   onRemoveCamera,
   onToggleCamera,
@@ -52,6 +54,8 @@ export function DevicesDialog({
   cameras?: HostCamera[];
   cameraErrors?: Record<string, string>;
   spotlight?: string | null;
+  shareQuality?: ShareQuality;
+  onShareQualityChange?: (quality: ShareQuality) => void;
   onAddCamera?: (name: string, deviceId: string) => void;
   onRemoveCamera?: (id: string) => void;
   onToggleCamera?: (id: string) => void;
@@ -231,6 +235,24 @@ export function DevicesDialog({
             value={selected.videoinput || "default"}
             onSelect={(id) => void selectDevice("videoinput", id)}
           />
+        )}
+
+        {shareQuality && onShareQualityChange && (
+          <div className="space-y-2">
+            <label className="font-display text-sm font-semibold tracking-wide text-accent">Qualidade do compartilhamento de tela</label>
+            <Select value={shareQuality} onValueChange={(q) => onShareQualityChange(q as ShareQuality)}>
+              <SelectTrigger aria-label="Qualidade do compartilhamento de tela">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2160">2160p (4K) · 8 Mbps</SelectItem>
+                <SelectItem value="1440">1440p · 6 Mbps</SelectItem>
+                <SelectItem value="1080">1080p (Full HD) · 4 Mbps</SelectItem>
+                <SelectItem value="720">720p (HD) · 2 Mbps</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Aplicada no próximo compartilhamento.</p>
+          </div>
         )}
 
         {audioFields.map(({ kind, label }) => (
