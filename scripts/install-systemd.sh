@@ -175,8 +175,14 @@ EOF
   chmod 600 "$INSTALL_DIR/.env"
 fi
 
-# ---- instalar o Bun ------------------------------------------------------
-if ! command -v bun >/dev/null 2>&1; then
+# ---- instalar o Bun (system-wide) ----------------------------------------
+# Usa um caminho determinístico para o serviço conseguir acessar o binário,
+# independentemente do PATH do root (que pode apontar para ~/.bun/bin/bun).
+if [ -x /usr/local/bin/bun ]; then
+  BUN_BIN="/usr/local/bin/bun"
+elif [ -x /usr/bin/bun ]; then
+  BUN_BIN="/usr/bin/bun"
+else
   log "Instalando Bun (system-wide)"
   # O instalador oficial (bun.sh/install) é um script bash. Em sistemas sem
   # bash (ex: Alpine), instala bash + unzip primeiro.
@@ -188,21 +194,26 @@ if ! command -v bun >/dev/null 2>&1; then
     fi
   fi
   curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash || die "Falha ao instalar Bun."
-  export PATH="/usr/local/bin:$PATH"
+  BUN_BIN="/usr/local/bin/bun"
+  [ -x "$BUN_BIN" ] || die "Bun não foi instalado em $BUN_BIN."
 fi
-BUN_BIN="$(command -v bun)"
 log "Bun: $BUN_BIN"
 
 # ---- usuário dedicado ----------------------------------------------------
-if ! id -u "$APP" >/dev/null 2>&1; then
-  if command -v useradd >/dev/null 2>&1; then
-    useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$APP"
-  elif command -v adduser >/dev/null 2>&1; then
-    adduser -S -D -H "$APP"
+if ! id "$APP" >/dev/null 2>&1; then
+  log "Criando usuário '$APP'"
+  if command -v apk >/dev/null 2>&1; then
+    # Alpine (busybox adduser): cria usuário e grupo de mesmo nome.
+    adduser -D -H "$APP" || die "Falha ao criar o usuário '$APP' (adduser)."
+  elif command -v useradd >/dev/null 2>&1; then
+    useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$APP" || die "Falha ao criar o usuário '$APP' (useradd)."
   else
     die "Não encontrei useradd/adduser para criar o usuário '$APP'."
   fi
 fi
+
+# Confirma que o usuário existe antes do chown.
+id "$APP" >/dev/null 2>&1 || die "O usuário '$APP' não foi criado corretamente."
 chown -R "$APP:$APP" "$INSTALL_DIR"
 
 # ---- serviço -------------------------------------------------------------
