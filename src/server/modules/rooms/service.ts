@@ -12,14 +12,13 @@ export async function getChannelOrThrow(channelId: string) {
 export type TokenRequest = {
   channelId: string;
   participantName: string;
-  role?: "host" | "guest";
   audience?: boolean;
 };
 
 export async function requestToken(input: TokenRequest) {
   const channel = await getChannelOrThrow(input.channelId);
 
-  // TV mode / audience: subscribe-only.
+  // Streaming mode / audience: subscribe-only.
   if (input.audience) {
     return issueToken({
       roomName: channel.id,

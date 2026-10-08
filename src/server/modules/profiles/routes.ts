@@ -1,9 +1,10 @@
 import { Elysia, t } from "elysia";
-import { getPhotoFile, getProfile, upsertProfile } from "./service";
+import { getPhotoFile, getProfile, ProfileError, upsertProfile } from "./service";
+import { authPlugin } from "../auth/plugin";
 
-export const profilesRoutes = new Elysia()
-  .get("/campaigns/:campaignId/profiles/me", async ({ params, query, set }) => {
-    const profile = await getProfile(params.campaignId, query.token ?? "");
+export const profilesRoutes = new Elysia().use(authPlugin)
+  .get("/campaigns/:campaignId/profiles/me", async ({ params, query, user, set }) => {
+    const profile = await getProfile(params.campaignId, query.token, user);
     if (!profile) {
       set.status = 404;
       return { error: "Profile not found" };
@@ -12,11 +13,11 @@ export const profilesRoutes = new Elysia()
   })
   .put(
     "/campaigns/:campaignId/profiles/me",
-    async ({ params, body, set }) => {
+    async ({ params, body, user, set }) => {
       try {
-        return await upsertProfile(params.campaignId, body);
+        return await upsertProfile(params.campaignId, body, user);
       } catch (error) {
-        set.status = 400;
+        set.status = error instanceof ProfileError ? error.status : 400;
         return { error: error instanceof Error ? error.message : "Invalid profile" };
       }
     },
@@ -26,6 +27,7 @@ export const profilesRoutes = new Elysia()
         name: t.String({ minLength: 1, maxLength: 60 }),
         characterName: t.Optional(t.Nullable(t.String({ maxLength: 60 }))),
         photo: t.Optional(t.Nullable(t.String({ maxLength: 3 * 1024 * 1024 }))),
+        inviteToken: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
       }),
     },
   )

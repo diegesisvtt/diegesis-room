@@ -28,6 +28,11 @@ export async function createChannel(campaignId: string, input: { name: string })
   return getChannel(id);
 }
 
+export async function updateChannel(id: string, input: { name: string }) {
+  await db.update(channels).set({ name: input.name }).where(eq(channels.id, id));
+  return getChannel(id);
+}
+
 export async function deleteChannel(id: string) {
   await db.delete(channels).where(eq(channels.id, id));
 }

@@ -3,28 +3,32 @@ import { cors } from "@elysiajs/cors";
 import { existsSync, statSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { runMigrations } from "./db/client";
-import { seed } from "./lib/seed";
+import { authPlugin } from "./modules/auth/plugin";
+import { authRoutes } from "./modules/auth/routes";
 import { campaignsRoutes } from "./modules/campaigns/routes";
 import { channelsRoutes, channelRoutes } from "./modules/channels/routes";
 import { invitesRoutes } from "./modules/invites/routes";
+import { membersRoutes } from "./modules/members/routes";
 import { profilesRoutes } from "./modules/profiles/routes";
 import { roomsRoutes } from "./modules/rooms/routes";
 import { chatRoutes, chatWs } from "./modules/chat/routes";
 import { settingsRoutes } from "./modules/settings/routes";
 
 runMigrations();
-await seed();
 
 const app = new Elysia()
   .use(cors())
+  .use(authPlugin)
   .get("/api/health", () => ({ ok: true, time: Date.now() }))
   .use(chatWs)
   .group("/api", (api) =>
     api
+      .use(authRoutes)
       .use(campaignsRoutes)
       .use(channelsRoutes)
       .use(channelRoutes)
       .use(invitesRoutes)
+      .use(membersRoutes)
       .use(profilesRoutes)
       .use(roomsRoutes)
       .use(chatRoutes)

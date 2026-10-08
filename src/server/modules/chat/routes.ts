@@ -1,13 +1,43 @@
 import { Elysia, t } from "elysia";
+import { eq } from "drizzle-orm";
 import { listMessages, listMessagesAfter, createMessage } from "./service";
+import { db } from "../../db/client";
+import { channels } from "../../db/schema";
+import { memberGuard } from "../../lib/guards";
+import { authPlugin } from "../auth/plugin";
 
-export const chatRoutes = new Elysia({ prefix: "/channels" })
-  .get("/:id/messages", async ({ params, query }) =>
-    listMessages(params.id, Number(query.limit ?? 50)),
-  )
+async function campaignIdOfChannel(channelId: string): Promise<string | null> {
+  const channel = await db.select().from(channels).where(eq(channels.id, channelId)).get();
+  return channel?.campaignId ?? null;
+}
+
+export const chatRoutes = new Elysia({ prefix: "/channels" }).use(authPlugin)
+  .get("/:id/messages", async ({ params, query, user, set }) => {
+    const campaignId = await campaignIdOfChannel(params.id);
+    if (!campaignId) {
+      set.status = 404;
+      return { error: "Channel not found" };
+    }
+    const check = await memberGuard(campaignId, user, query.profileToken);
+    if (!check.ok) {
+      set.status = check.status;
+      return { error: check.error };
+    }
+    return listMessages(params.id, Number(query.limit ?? 50));
+  })
   .post(
     "/:id/messages",
-    async ({ params, body, set }) => {
+    async ({ params, body, user, set }) => {
+      const campaignId = await campaignIdOfChannel(params.id);
+      if (!campaignId) {
+        set.status = 404;
+        return { error: "Channel not found" };
+      }
+      const check = await memberGuard(campaignId, user, body.profileToken);
+      if (!check.ok) {
+        set.status = check.status;
+        return { error: check.error };
+      }
       try {
         const message = await createMessage(params.id, body);
         if (message) deliver(params.id, [message]);
@@ -23,6 +53,7 @@ export const chatRoutes = new Elysia({ prefix: "/channels" })
         body: t.String(),
         kind: t.Optional(t.Union([t.Literal("text"), t.Literal("roll"), t.Literal("system")])),
         rollJson: t.Optional(t.String()),
+        profileToken: t.Optional(t.String()),
       }),
     },
   );
@@ -88,30 +119,79 @@ setInterval(() => {
   }
 }, WATCH_INTERVAL_MS);
 
+const authorizedSockets = new WeakSet<object>();
+const socketProfileTokens = new WeakMap<object, string>();
+// Mapa reverso para derrubar sockets de um perfil (kick/ban/reject).
+const socketsByProfileToken = new Map<string, Set<{ close: () => void }>>();
+
+/** Fecha todos os sockets de chat de um perfil (chamado ao expulsar/banir/rejeitar). */
+export function dropSocketsForProfile(profileToken: string) {
+  const sockets = socketsByProfileToken.get(profileToken);
+  if (!sockets) return;
+  for (const ws of sockets) {
+    try {
+      ws.close();
+    } catch {
+      /* já fechado */
+    }
+  }
+  socketsByProfileToken.delete(profileToken);
+}
+
 export const chatWs = new Elysia().ws("/ws/channels/:id", {
   open(ws) {
     const channelId = ws.data.params.id;
-    subscribe(channelId, ws);
-    // On reconnect the client passes ?since=<lastMessageId> to fill only the gap.
-    const since = ws.data.query.since;
-    const pending = since
-      ? listMessagesAfter(channelId, since)
-      : listMessages(channelId, 50);
-    void pending.then((history) => {
-      ws.send(JSON.stringify({ type: "history", messages: history }));
-      const last = history[history.length - 1];
-      if (last) {
-        const current = lastDelivered.get(channelId);
-        if (!current || current < last.id) lastDelivered.set(channelId, last.id);
+    const profileToken = ws.data.query.profileToken;
+    // Só membros ativos da campanha recebem/enviam chat em tempo real.
+    void (async () => {
+      const campaignId = await campaignIdOfChannel(channelId);
+      const check = campaignId
+        ? await memberGuard(campaignId, null, profileToken)
+        : ({ ok: false } as const);
+      if (!check.ok) {
+        ws.close();
+        return;
       }
-    });
+      authorizedSockets.add(ws);
+      if (profileToken) {
+        socketProfileTokens.set(ws, profileToken);
+        let set = socketsByProfileToken.get(profileToken);
+        if (!set) {
+          set = new Set();
+          socketsByProfileToken.set(profileToken, set);
+        }
+        set.add(ws);
+      }
+      subscribe(channelId, ws);
+      // On reconnect the client passes ?since=<lastMessageId> to fill only the gap.
+      const since = ws.data.query.since;
+      const pending = since
+        ? listMessagesAfter(channelId, since)
+        : listMessages(channelId, 50);
+      void pending.then((history) => {
+        ws.send(JSON.stringify({ type: "history", messages: history }));
+        const last = history[history.length - 1];
+        if (last) {
+          const current = lastDelivered.get(channelId);
+          if (!current || current < last.id) lastDelivered.set(channelId, last.id);
+        }
+      });
+    })();
   },
   close(ws) {
     const channelId = ws.data.params.id;
+    const profileToken = socketProfileTokens.get(ws);
+    if (profileToken) {
+      const set = socketsByProfileToken.get(profileToken);
+      set?.delete(ws);
+      if (set && set.size === 0) socketsByProfileToken.delete(profileToken);
+    }
     unsubscribe(channelId, ws);
   },
   message(ws, raw) {
+    if (!authorizedSockets.has(ws)) return;
     const channelId = ws.data.params.id;
+    const profileToken = socketProfileTokens.get(ws);
     // Elysia auto-parses JSON string frames into objects.
     let data: { type?: string; authorName?: string; body?: string; kind?: "text" | "roll" | "system"; rollJson?: string };
     if (typeof raw === "string") {
@@ -128,13 +208,24 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
 
     if (data.type !== "message" || !data.authorName || !data.body) return;
 
-    void createMessage(channelId, {
-      authorName: data.authorName,
-      body: data.body,
-      kind: data.kind,
-      rollJson: data.rollJson,
-    }).then((message) => {
+    // Revalida o membership a cada mensagem: ban/kick durante a sessão
+    // interrompem o participante sem esperar ele fechar a aba.
+    void (async () => {
+      const campaignId = await campaignIdOfChannel(channelId);
+      const check = campaignId
+        ? await memberGuard(campaignId, null, profileToken)
+        : ({ ok: false } as const);
+      if (!check.ok) {
+        ws.close();
+        return;
+      }
+      const message = await createMessage(channelId, {
+        authorName: data.authorName!,
+        body: data.body!,
+        kind: data.kind,
+        rollJson: data.rollJson,
+      });
       if (message) deliver(channelId, [message]);
-    });
+    })();
   },
 });

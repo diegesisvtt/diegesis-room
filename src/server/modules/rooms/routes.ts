@@ -1,19 +1,42 @@
 import { Elysia, t } from "elysia";
+import { eq } from "drizzle-orm";
 import { requestToken } from "./service";
 import { muteParticipant, removeParticipant } from "../../lib/livekit";
+import { db } from "../../db/client";
+import { channels } from "../../db/schema";
+import { hostGuard, memberGuard } from "../../lib/guards";
+import { authPlugin } from "../auth/plugin";
 
 const TokenBody = t.Object({
   channelId: t.String(),
   participantName: t.String(),
-  role: t.Optional(t.Union([t.Literal("host"), t.Literal("guest")])),
   audience: t.Optional(t.Boolean()),
+  profileToken: t.Optional(t.String()),
 });
 
-export const roomsRoutes = new Elysia({ prefix: "/rooms" })
-  // Issue a LiveKit token (direct join, or subscribe-only for audience/TV)
+async function campaignIdOfChannel(channelId: string): Promise<string | null> {
+  const channel = await db.select().from(channels).where(eq(channels.id, channelId)).get();
+  return channel?.campaignId ?? null;
+}
+
+export const roomsRoutes = new Elysia({ prefix: "/rooms" }).use(authPlugin)
+  // Issue a LiveKit token (direct join, or subscribe-only for audience/streaming)
   .post(
     "/token",
-    async ({ body, set }) => {
+    async ({ body, user, set }) => {
+      // Audience (modo TV/streaming): subscribe-only, link público do canal.
+      if (!body.audience) {
+        const campaignId = await campaignIdOfChannel(body.channelId);
+        if (!campaignId) {
+          set.status = 404;
+          return { error: "Channel not found" };
+        }
+        const check = await memberGuard(campaignId, user, body.profileToken);
+        if (!check.ok) {
+          set.status = check.status;
+          return { error: check.error };
+        }
+      }
       try {
         return await requestToken(body);
       } catch (err) {
@@ -23,10 +46,20 @@ export const roomsRoutes = new Elysia({ prefix: "/rooms" })
     },
     { body: TokenBody },
   )
-  // Moderation
+  // Moderation (host da campanha apenas)
   .post(
     "/:channelId/participants/mute",
-    async ({ params, body }) => {
+    async ({ params, body, user, set }) => {
+      const campaignId = await campaignIdOfChannel(params.channelId);
+      if (!campaignId) {
+        set.status = 404;
+        return { error: "Channel not found" };
+      }
+      const check = await hostGuard(campaignId, user);
+      if (!check.ok) {
+        set.status = check.status;
+        return { error: check.error };
+      }
       await muteParticipant(params.channelId, body.identity, body.muted);
       return { ok: true };
     },
@@ -34,7 +67,17 @@ export const roomsRoutes = new Elysia({ prefix: "/rooms" })
   )
   .post(
     "/:channelId/participants/remove",
-    async ({ params, body }) => {
+    async ({ params, body, user, set }) => {
+      const campaignId = await campaignIdOfChannel(params.channelId);
+      if (!campaignId) {
+        set.status = 404;
+        return { error: "Channel not found" };
+      }
+      const check = await hostGuard(campaignId, user);
+      if (!check.ok) {
+        set.status = check.status;
+        return { error: check.error };
+      }
       await removeParticipant(params.channelId, body.identity);
       return { ok: true };
     },
