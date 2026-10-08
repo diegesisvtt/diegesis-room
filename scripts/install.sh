@@ -99,9 +99,10 @@ require_root() {
 }
 
 prompt() {
-  # $1 = texto, $2 = default. Imprime o valor final (lido ou default).
+  # $1 = texto, $2 = default. Imprime o prompt no stderr (para aparecer mesmo
+  # dentro de command substitution) e devolve o valor no stdout.
   _p_text="$1"; _p_default="$2"; _p_val=""
-  printf '%s' "$_p_text [${_p_default}]: "
+  printf '%s' "$_p_text [${_p_default}]: " >&2
   IFS= read -r _p_val
   if [ -z "$_p_val" ]; then
     _p_val="$_p_default"
