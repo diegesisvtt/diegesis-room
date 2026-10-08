@@ -1,0 +1,20 @@
+services:
+  diegesis-room:
+    build:
+      context: .
+    image: diegesis-room:latest
+    container_name: diegesis-room
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    # O app escuta na porta 3000 (fixa) dentro do container; a porta do host
+    # é mapeada via ${PORT} acima. Valores (LiveKit, PUBLIC_URL, etc.) vêm do .env.
+    environment:
+      - PORT=3000
+    env_file:
+      - .env
+    volumes:
+      - diegesis-room-data:/app/data
+
+volumes:
+  diegesis-room-data:
