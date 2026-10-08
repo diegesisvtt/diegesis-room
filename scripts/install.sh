@@ -235,11 +235,16 @@ else
   # Instala o Bun system-wide se necessário.
   if ! command -v bun >/dev/null 2>&1; then
     log "Instalando Bun (system-wide)"
-    if command -v bash >/dev/null 2>&1; then
-      curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash || die "Falha ao instalar Bun."
-    else
-      curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local sh || die "Falha ao instalar Bun."
+    # O instalador oficial (bun.sh/install) é um script bash. Em sistemas sem
+    # bash (ex: Alpine), instala bash + unzip primeiro.
+    if ! command -v bash >/dev/null 2>&1; then
+      if command -v apk >/dev/null 2>&1; then
+        apk add --no-cache bash unzip || die "Falha ao instalar bash/unzip."
+      elif command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq bash unzip || die "Falha ao instalar bash/unzip."
+      fi
     fi
+    curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash || die "Falha ao instalar Bun."
     export PATH="/usr/local/bin:$PATH"
   fi
   BUN_BIN="$(command -v bun)"
@@ -280,22 +285,26 @@ EOF
     systemctl restart "$APP" || systemctl start "$APP"
     log "Serviço systemd '${APP}' iniciado."
   else
+    # Wrapper que carrega o .env e executa o Bun. O OpenRC não tem
+    # EnvironmentFile, então o wrapper torna o carregamento autocontido.
+    cat > "${INSTALL_DIR}/run.sh" <<EOF
+#!/bin/sh
+cd "${INSTALL_DIR}"
+set -a
+. "${INSTALL_DIR}/.env"
+set +a
+exec "${BUN_BIN}" dist-server/index.js
+EOF
+    chmod 755 "${INSTALL_DIR}/run.sh"
+
     cat > "/etc/init.d/${APP}" <<EOF
 #!/sbin/openrc-run
 
 name="${APP}"
 description="Diegesis Room"
 
-# Carrega o .env antes de iniciar.
-if [ -f "${INSTALL_DIR}/.env" ]; then
-    set -a
-    . "${INSTALL_DIR}/.env"
-    set +a
-fi
-
 supervisor="supervise-daemon"
-command="${BUN_BIN}"
-command_args="dist-server/index.js"
+command="${INSTALL_DIR}/run.sh"
 command_user="${APP}"
 directory="${INSTALL_DIR}"
 
