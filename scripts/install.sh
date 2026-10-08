@@ -12,10 +12,17 @@ set -eu
 #   curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh -o install.sh
 #   sh install.sh
 #
+# Repositório privado? Adicione o header de autenticação nas duas chamadas
+# (baixar o install.sh e depois rodá-lo com GH_TOKEN exportado):
+#   curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+#     https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh -o install.sh
+#   GH_TOKEN=$GH_TOKEN sh install.sh
+#
 # Instalação não-interativa (via variáveis de ambiente):
-#   curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh | \
-#     env MODE=systemd LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... \
-#         PUBLIC_URL=https://meu.servidor sh
+#   curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+#     https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh | \
+#     env GH_TOKEN=$GH_TOKEN MODE=systemd LIVEKIT_URL=... LIVEKIT_API_KEY=... \
+#         LIVEKIT_API_SECRET=... PUBLIC_URL=https://meu.servidor sh
 #
 # Opções (flags ou variáveis de ambiente):
 #   --mode docker|systemd   (MODE)        Como rodar o serviço. Padrão: docker
@@ -24,6 +31,7 @@ set -eu
 #   --dir /opt/diegesis-room (INSTALL_DIR) Diretório de instalação
 #   --port 3000             (PORT)        Porta HTTP
 #   --non-interactive       (NO_PROMPT=1) Usa variáveis de ambiente, sem perguntar
+#   GH_TOKEN=<token>        Token do GitHub para repos privados
 # ============================================================================
 
 REPO="diegesisvtt/diegesis-room"
@@ -34,6 +42,7 @@ VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/$APP}"
 PORT="${PORT:-3000}"
 NO_PROMPT="${NO_PROMPT:-0}"
+TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 INIT=""
 
 usage() {
@@ -49,6 +58,7 @@ Opções (flags ou variáveis de ambiente):
   --dir /opt/diegesis-room (INSTALL_DIR) Diretório de instalação
   --port 3000             (PORT)        Porta HTTP
   --non-interactive       (NO_PROMPT=1) Usa variáveis de ambiente, sem perguntar
+  GH_TOKEN=<token>        Token do GitHub (necessário p/ repos privados)
 EOF
 }
 
@@ -135,7 +145,13 @@ else
     URL="https://github.com/${REPO}/releases/download/${TAG}/${APP}-${VER}.tar.gz"
   fi
   log "Baixando ${URL}"
-  curl -fsSL "$URL" -o "$STAGING/pkg.tar.gz" || die "Falha ao baixar o release. A tag/asset existe?"
+  if [ -n "$TOKEN" ]; then
+    curl -fsSL -H "Authorization: Bearer ${TOKEN}" "$URL" -o "$STAGING/pkg.tar.gz" \
+      || die "Falha ao baixar o release (verifique o GH_TOKEN e se a tag/asset existe)."
+  else
+    curl -fsSL "$URL" -o "$STAGING/pkg.tar.gz" \
+      || die "Falha ao baixar o release. Se o repositório for privado, exporte GH_TOKEN=<seu token>."
+  fi
   mkdir -p "$STAGING/extract"
   tar -xzf "$STAGING/pkg.tar.gz" -C "$STAGING/extract" || die "Falha ao extrair o pacote."
   SRC_DIR="$STAGING/extract"

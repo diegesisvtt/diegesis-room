@@ -147,6 +147,15 @@ curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download
 sh install.sh
 ```
 
+> **Repositório privado?** O download dos assets exige autenticação. Use um token
+> (PAT com escopo `repo` ou fine-grained com "Contents: Read"):
+>
+> ```sh
+> curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+>   https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh -o install.sh
+> GH_TOKEN=$GH_TOKEN sh install.sh
+> ```
+
 O script detecta o ambiente e suporta três formas de rodar:
 
 | Modo | Comando | Requisito |
