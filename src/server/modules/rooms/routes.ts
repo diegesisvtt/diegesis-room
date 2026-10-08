@@ -24,6 +24,7 @@ export const roomsRoutes = new Elysia({ prefix: "/rooms" }).use(authPlugin)
   .post(
     "/token",
     async ({ body, user, set }) => {
+      let photoUrl: string | null = null;
       // Audience (modo TV/streaming): subscribe-only, link público do canal.
       if (!body.audience) {
         const campaignId = await campaignIdOfChannel(body.channelId);
@@ -36,9 +37,13 @@ export const roomsRoutes = new Elysia({ prefix: "/rooms" }).use(authPlugin)
           set.status = check.status;
           return { error: check.error };
         }
+        const membership = check.membership;
+        if (membership?.photoPath) {
+          photoUrl = `/api/profiles/${membership.id}/photo?v=${membership.updatedAt.getTime()}`;
+        }
       }
       try {
-        return await requestToken(body);
+        return await requestToken({ ...body, photoUrl });
       } catch (err) {
         set.status = 400;
         return { error: err instanceof Error ? err.message : "Unable to issue token" };

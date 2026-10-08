@@ -7,6 +7,7 @@ export type TokenGrant = {
   participantName: string;
   canPublish: boolean;
   canSubscribe?: boolean;
+  metadata?: string;
 };
 
 export type TokenResult = { mode: "live"; token: string; url: string; identity: string };
@@ -29,6 +30,7 @@ export async function issueToken(grant: TokenGrant): Promise<TokenResult> {
     identity,
     name: grant.participantName,
     ttl: "4h",
+    ...(grant.metadata ? { metadata: grant.metadata } : {}),
   });
 
   token.addGrant({

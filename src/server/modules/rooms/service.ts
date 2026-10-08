@@ -13,6 +13,7 @@ export type TokenRequest = {
   channelId: string;
   participantName: string;
   audience?: boolean;
+  photoUrl?: string | null;
 };
 
 export async function requestToken(input: TokenRequest) {
@@ -25,6 +26,7 @@ export async function requestToken(input: TokenRequest) {
       participantName: input.participantName,
       canPublish: false,
       canSubscribe: true,
+      metadata: JSON.stringify({ audience: true }),
     });
   }
 
@@ -33,5 +35,6 @@ export async function requestToken(input: TokenRequest) {
     participantName: input.participantName,
     canPublish: true,
     canSubscribe: true,
+    ...(input.photoUrl ? { metadata: JSON.stringify({ photo: input.photoUrl }) } : {}),
   });
 }
