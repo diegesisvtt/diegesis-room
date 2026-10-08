@@ -1,23 +1,25 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # ============================================================================
 # Diegesis Room — instalador de servidor (um único comando)
 #
 # Baixa o release mais recente (ou uma versão específica) e configura o
-# serviço para rodar via Docker OU Bun puro (systemd).
+# serviço para rodar via Docker OU Bun puro (systemd no Linux padrão,
+# OpenRC no Alpine). Script POSIX sh — funciona em Debian/Ubuntu e Alpine.
 #
 # Instalação interativa (recomendado):
 #   curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh -o install.sh
-#   bash install.sh
+#   sh install.sh
 #
 # Instalação não-interativa (via variáveis de ambiente):
 #   curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh | \
 #     env MODE=systemd LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... \
-#         PUBLIC_URL=https://meu.servidor bash
+#         PUBLIC_URL=https://meu.servidor sh
 #
 # Opções (flags ou variáveis de ambiente):
 #   --mode docker|systemd   (MODE)        Como rodar o serviço. Padrão: docker
+#                                         (systemd: systemd no Linux padrão, OpenRC no Alpine)
 #   --version v1.2.3        (VERSION)     Tag específica. Padrão: latest
 #   --dir /opt/diegesis-room (INSTALL_DIR) Diretório de instalação
 #   --port 3000             (PORT)        Porta HTTP
@@ -32,15 +34,17 @@ VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/$APP}"
 PORT="${PORT:-3000}"
 NO_PROMPT="${NO_PROMPT:-0}"
+INIT=""
 
 usage() {
   cat <<'EOF'
 Uso:
   curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh -o install.sh
-  bash install.sh
+  sh install.sh
 
 Opções (flags ou variáveis de ambiente):
   --mode docker|systemd   (MODE)        Como rodar o serviço. Padrão: docker
+                                        (systemd: systemd no Linux padrão, OpenRC no Alpine)
   --version v1.2.3        (VERSION)     Tag específica. Padrão: latest
   --dir /opt/diegesis-room (INSTALL_DIR) Diretório de instalação
   --port 3000             (PORT)        Porta HTTP
@@ -65,8 +69,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Alias de conveniência.
+[ "$MODE" = "service" ] && MODE="systemd"
+
 if [ "$MODE" != "docker" ] && [ "$MODE" != "systemd" ]; then
   die "MODE inválido: '$MODE' (use 'docker' ou 'systemd')"
+fi
+
+# stdin não é terminal (ex: curl | sh) -> assume não-interativo.
+if [ ! -t 0 ]; then
+  NO_PROMPT=1
 fi
 
 # ---- helpers -------------------------------------------------------------
@@ -77,15 +89,14 @@ require_root() {
 }
 
 prompt() {
-  local text="$1" default="$2" value
-  if [ "$NO_PROMPT" = "1" ]; then
-    value="$default"
-  else
-    printf '%s' "$text [${default}]: "
-    read -r value
-    value="${value:-$default}"
+  # $1 = texto, $2 = default. Imprime o valor final (lido ou default).
+  _p_text="$1"; _p_default="$2"; _p_val=""
+  printf '%s' "$_p_text [${_p_default}]: "
+  IFS= read -r _p_val
+  if [ -z "$_p_val" ]; then
+    _p_val="$_p_default"
   fi
-  printf '%s' "$value"
+  printf '%s' "$_p_val"
 }
 
 # ---- dependências --------------------------------------------------------
@@ -97,7 +108,13 @@ if [ "$MODE" = "docker" ]; then
   docker info >/dev/null 2>&1 || die "Docker não está acessível. O daemon está rodando?"
 else
   require_root
-  command -v systemctl >/dev/null 2>&1 || die "Modo systemd exige systemd (systemctl não encontrado)."
+  if command -v systemctl >/dev/null 2>&1; then
+    INIT="systemd"
+  elif command -v rc-service >/dev/null 2>&1; then
+    INIT="openrc"
+  else
+    die "Não encontrei systemd nem OpenRC. Use --mode docker ou instale um init system."
+  fi
 fi
 
 # ---- obter o release -----------------------------------------------------
@@ -201,18 +218,30 @@ else
   # Instala o Bun system-wide se necessário.
   if ! command -v bun >/dev/null 2>&1; then
     log "Instalando Bun (system-wide)"
-    curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash || die "Falha ao instalar Bun."
+    if command -v bash >/dev/null 2>&1; then
+      curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash || die "Falha ao instalar Bun."
+    else
+      curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local sh || die "Falha ao instalar Bun."
+    fi
     export PATH="/usr/local/bin:$PATH"
   fi
   BUN_BIN="$(command -v bun)"
   log "Bun: $BUN_BIN"
 
+  # Usuário dedicado (useradd no Linux padrão, adduser no Alpine).
   if ! id -u "$APP" >/dev/null 2>&1; then
-    useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$APP"
+    if command -v useradd >/dev/null 2>&1; then
+      useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$APP"
+    elif command -v adduser >/dev/null 2>&1; then
+      adduser -S -D -H "$APP"
+    else
+      die "Não encontrei useradd/adduser para criar o usuário '$APP'."
+    fi
   fi
   chown -R "$APP:$APP" "$INSTALL_DIR"
 
-  cat > "/etc/systemd/system/${APP}.service" <<EOF
+  if [ "$INIT" = "systemd" ]; then
+    cat > "/etc/systemd/system/${APP}.service" <<EOF
 [Unit]
 Description=Diegesis Room
 After=network.target
@@ -229,22 +258,52 @@ RestartSec=2
 [Install]
 WantedBy=multi-user.target
 EOF
+    systemctl daemon-reload
+    systemctl enable "$APP"
+    systemctl restart "$APP" || systemctl start "$APP"
+    log "Serviço systemd '${APP}' iniciado."
+  else
+    cat > "/etc/init.d/${APP}" <<EOF
+#!/sbin/openrc-run
 
-  systemctl daemon-reload
-  systemctl enable "$APP"
-  systemctl restart "$APP" || systemctl start "$APP"
-  log "Serviço systemd '${APP}' iniciado."
+name="${APP}"
+description="Diegesis Room"
+
+# Carrega o .env antes de iniciar.
+if [ -f "${INSTALL_DIR}/.env" ]; then
+    set -a
+    . "${INSTALL_DIR}/.env"
+    set +a
+fi
+
+supervisor="supervise-daemon"
+command="${BUN_BIN}"
+command_args="dist-server/index.js"
+command_user="${APP}"
+directory="${INSTALL_DIR}"
+
+depend() {
+    need net
+}
+EOF
+    chmod +x "/etc/init.d/${APP}"
+    rc-update add "${APP}" default
+    rc-service "${APP}" restart || rc-service "${APP}" start
+    log "Serviço OpenRC '${APP}' iniciado."
+  fi
 fi
 
 # ---- health check --------------------------------------------------------
 log "Aguardando subir e checando /api/health..."
 HEALTHY=0
-for _ in $(seq 1 30); do
+i=1
+while [ "$i" -le 30 ]; do
   if curl -fsS "http://localhost:${PORT}/api/health" >/dev/null 2>&1; then
     HEALTHY=1
     break
   fi
   sleep 1
+  i=$((i + 1))
 done
 
 if [ "$HEALTHY" = "1" ]; then

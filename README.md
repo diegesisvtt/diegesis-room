@@ -120,6 +120,58 @@ Crie um projeto em <https://cloud.livekit.io> e cole a URL (`wss://...`) e as cr
    `http://<servidor>/stream/<channelId>` direto no navegador da TV) para exibir os jogadores
    remotos em tela cheia.
 
+## Deploy (release + instalação no servidor)
+
+O release é automatizado por GitHub Actions (`.github/workflows/release.yml`). Ao publicar
+uma tag `v*` na `main`, ele builda o app, empacota num `.tar.gz` e publica um GitHub Release
+com os assets (`diegesis-room-<versão>.tar.gz`, `diegesis-room.tar.gz`, `install.sh` e `SHA256SUMS.txt`).
+
+### Criando um release
+
+```sh
+# 1. Ajuste a versão no package.json (deve bater com a tag)
+# 2. Commit + tag + push
+git add -A && git commit -m "chore: release v0.2.0"
+git tag v0.2.0
+git push origin v0.2.0   # dispara o workflow de release
+```
+
+> A tag precisa apontar para um commit na `main`, e a versão do `package.json` deve
+> coincidir com o número da tag (ex: `v0.2.0` ↔ `"version": "0.2.0"`).
+
+### Instalando no servidor (um comando)
+
+```sh
+# Interativo (pergunta LiveKit / URL pública)
+curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh -o install.sh
+sh install.sh
+```
+
+O script detecta o ambiente e suporta três formas de rodar:
+
+| Modo | Comando | Requisito |
+| --- | --- | --- |
+| Docker (padrão) | `sh install.sh` | Docker instalado |
+| systemd (Linux padrão) | `MODE=systemd sh install.sh` | systemd; Bun é instalado automaticamente |
+| OpenRC (Alpine) | `MODE=systemd sh install.sh` | Alpine/OpenRC; Bun é instalado automaticamente |
+
+O `MODE=systemd` detecta automaticamente o init system (systemd ou OpenRC). Outras opções
+via flag ou variável de ambiente: `--version v0.2.0`, `--dir /opt/diegesis-room`,
+`--port 3000`, `--non-interactive`.
+
+Instalação não-interativa (CI/scripts):
+
+```sh
+curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh | \
+  env MODE=systemd LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... \
+      PUBLIC_URL=https://meu.dominio sh
+```
+
+### Atualizando
+
+Rode o mesmo comando de instalação. O script preserva o `.env` e o `data/` (SQLite) e
+recarrega o serviço. Para rollback, instale uma versão específica com `--version v0.1.0`.
+
 ## Notas de implementação
 
 - O chat de **canal de texto** é persistente (SQLite + WebSocket com broadcast em memória).
