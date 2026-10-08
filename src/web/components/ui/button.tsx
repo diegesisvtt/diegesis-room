@@ -4,16 +4,22 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/web/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:transition-transform [&_svg]:duration-200 active:scale-[0.96] hover:[&_svg]:scale-110",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
-        outline: "border border-input bg-transparent shadow-sm hover:bg-secondary",
-        secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
+        default:
+          "bg-primary text-primary-foreground shadow hover:bg-primary/90 hover:shadow-[var(--shadow-glow-violet)]",
+        gold: "bg-accent text-accent-foreground font-semibold shadow hover:bg-gold-bright hover:shadow-[var(--shadow-glow-gold)] hover:-translate-y-px",
+        destructive:
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
+        outline:
+          "border border-input bg-transparent shadow-sm hover:bg-secondary hover:border-accent/40",
+        "outline-gold":
+          "border border-accent/30 bg-transparent text-accent shadow-sm hover:bg-accent/10 hover:border-accent/60 hover:shadow-[var(--shadow-glow-gold)]",
+        secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 hover:-translate-y-px",
         ghost: "hover:bg-secondary hover:text-secondary-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-accent underline-offset-4 hover:underline hover:text-gold-bright",
       },
       size: {
         default: "h-9 px-4 py-2",

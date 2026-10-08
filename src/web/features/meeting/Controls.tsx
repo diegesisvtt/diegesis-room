@@ -11,6 +11,7 @@ import {
   Users,
   Video,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import type { RoomStatus } from "./useLiveKitRoom";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
@@ -63,14 +64,23 @@ export function Controls({
   const connecting = status === "connecting";
 
   return (
-    <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-3">
+    <motion.footer
+      initial={{ y: 40, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 260, damping: 26 }}
+      className="mx-3 mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border border-accent/20 bg-card/80 px-3 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-md"
+    >
       <div className="hidden min-w-0 xl:block">
-        <p className="text-xs font-semibold">{statusText}</p>
+        <p className="font-display text-xs font-semibold tracking-wide text-glow">{statusText}</p>
         <p className="text-[10px] text-muted-foreground">Mesa híbrida</p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1">
-        <IconControl label={micOn ? "Desligar microfone" : "Ligar microfone"} active={!micOn} onClick={onMic}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <IconControl
+          label={micOn ? "Desligar microfone" : "Ligar microfone"}
+          tone={!micOn ? "danger" : "default"}
+          onClick={onMic}
+        >
           {micOn ? <Mic /> : <MicOff />}
         </IconControl>
         <IconControl label="Opções de áudio e vídeo" onClick={onOpenDevices}>
@@ -87,22 +97,36 @@ export function Controls({
         <IconControl label="Participantes" onClick={onOpenParticipants}>
           <Users />
         </IconControl>
-        <IconControl label={handRaised ? "Abaixar mão" : "Levantar mão"} active={handRaised} onClick={onHand}>
+        <IconControl label={handRaised ? "Abaixar mão" : "Levantar mão"} tone={handRaised ? "gold" : "default"} onClick={onHand}>
           <Hand />
         </IconControl>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-8 sm:size-9" aria-label="Reações" title="Reações">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-full sm:size-9"
+              aria-label="Reações"
+              title="Reações"
+            >
               <Smile />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-64" side="top">
-            <p className="mb-3 text-xs font-semibold">Reações</p>
+            <p className="mb-3 font-display text-xs font-semibold tracking-wide text-accent">Reações</p>
             <div className="grid grid-cols-6 gap-1">
               {reactions.map((r) => (
-                <Button key={r.label} variant="ghost" size="icon" aria-label={r.label} onClick={() => onReaction(r.emoji)} className="text-xl">
+                <motion.button
+                  key={r.label}
+                  type="button"
+                  whileTap={{ scale: 1.4 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 18 }}
+                  aria-label={r.label}
+                  onClick={() => onReaction(r.emoji)}
+                  className="flex size-9 items-center justify-center rounded-full text-xl transition-transform duration-150 hover:scale-125 hover:bg-secondary"
+                >
                   {r.emoji}
-                </Button>
+                </motion.button>
               ))}
             </div>
           </PopoverContent>
@@ -111,9 +135,10 @@ export function Controls({
 
       <Button
         size="sm"
-        variant={live ? "destructive" : "default"}
+        variant={live ? "destructive" : "gold"}
         disabled={connecting || (!onConnect && !live)}
         onClick={live ? onLeave : onConnect}
+        className={cn("rounded-full px-4", live && "shadow-[0_0_16px_rgba(239,68,68,0.35)]")}
       >
         {live ? (
           <>
@@ -125,20 +150,24 @@ export function Controls({
           </>
         )}
       </Button>
-    </footer>
+    </motion.footer>
   );
 }
+
+type Tone = "default" | "gold" | "danger";
 
 function IconControl({
   label,
   children,
   onClick,
   active,
+  tone = "default",
 }: {
   label: string;
   children: React.ReactNode;
   onClick: () => void;
   active?: boolean;
+  tone?: Tone;
 }) {
   return (
     <Tooltip>
@@ -148,7 +177,12 @@ function IconControl({
           size="icon"
           aria-label={label}
           onClick={onClick}
-          className={cn("size-8 shrink-0 sm:size-9", active && "bg-secondary")}
+          className={cn(
+            "size-8 shrink-0 rounded-full sm:size-9",
+            tone === "danger" &&
+              "bg-destructive text-destructive-foreground shadow-[0_0_14px_rgba(239,68,68,0.35)] hover:bg-destructive/90 hover:text-destructive-foreground",
+            tone === "gold" && "animate-glow-pulse bg-accent text-accent-foreground hover:bg-gold-bright hover:text-accent-foreground",
+          )}
         >
           {children}
         </Button>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { api } from "@/web/lib/api";
 import { displayName, type Session } from "@/web/lib/session";
 import { useLiveKitRoom } from "./useLiveKitRoom";
@@ -6,7 +7,7 @@ import { MeetingStage } from "./MeetingStage";
 import { Controls } from "./Controls";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { DevicesDialog } from "./DevicesDialog";
-import { UserX } from "lucide-react";
+import { Loader2, UserX } from "lucide-react";
 import { Button } from "@/web/components/ui/button";
 
 export function VoiceStage({
@@ -44,18 +45,50 @@ export function VoiceStage({
 
   if (meeting.status === "error") {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-        <div className="text-center">
-          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-secondary">
-            <UserX className="size-6 text-danger" />
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6">
+        <div
+          aria-hidden
+          className="map-grid pointer-events-none absolute inset-0 opacity-30 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_80%)]"
+        />
+        <div aria-hidden className="vignette pointer-events-none absolute inset-0" />
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 220, damping: 24 }}
+          className="relative text-center"
+        >
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-destructive/40 bg-secondary shadow-[0_0_28px_rgba(239,68,68,0.3)]">
+            <UserX className="size-8 text-danger" />
           </div>
-          <p className="text-lg font-semibold">Não foi possível conectar</p>
-          <p className="mt-1 text-sm text-muted-foreground">Verifique a configuração do LiveKit e tente novamente.</p>
-          <div className="mt-5 flex justify-center gap-2">
-            <Button onClick={() => void meeting.connect()}>Tentar novamente</Button>
-            <Button variant="outline" onClick={leave}>Voltar ao chat</Button>
+          <p className="font-display text-2xl font-semibold tracking-wide text-glow">Não foi possível conectar</p>
+          <p className="mt-2 text-sm text-muted-foreground">Verifique a configuração do LiveKit e tente novamente.</p>
+          <div className="mt-6 flex justify-center gap-2">
+            <Button variant="gold" onClick={() => void meeting.connect()}>Tentar novamente</Button>
+            <Button variant="outline-gold" onClick={leave}>Voltar ao chat</Button>
           </div>
-        </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (meeting.status === "idle" || meeting.status === "connecting") {
+    return (
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6">
+        <div
+          aria-hidden
+          className="map-grid pointer-events-none absolute inset-0 opacity-30 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_80%)]"
+        />
+        <div aria-hidden className="vignette pointer-events-none absolute inset-0" />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.94 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 220, damping: 24 }}
+          className="relative text-center"
+        >
+          <Loader2 className="mx-auto mb-4 size-10 animate-spin text-accent drop-shadow-[0_0_14px_color-mix(in_oklab,var(--color-accent)_60%,transparent)]" />
+          <p className="font-display text-2xl font-semibold tracking-wide text-glow">Convocando a mesa…</p>
+          <p className="mt-2 text-sm text-muted-foreground">Preparando áudio, vídeo e a conexão com a sala.</p>
+        </motion.div>
       </div>
     );
   }

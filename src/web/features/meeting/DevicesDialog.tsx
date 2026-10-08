@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Room } from "livekit-client";
 import { Plus, Settings, Star, Trash2, Volume2 } from "lucide-react";
+import { motion } from "framer-motion";
 import type { CameraQuality, HostCamera } from "./useLiveKitRoom";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
@@ -21,6 +22,14 @@ const audioFields: { kind: DeviceKind; label: string }[] = [
   { kind: "audioinput", label: "Microfone" },
   { kind: "audiooutput", label: "Saída de áudio" },
 ];
+
+const list = {
+  show: { transition: { staggerChildren: 0.05 } },
+};
+const row = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 26 } },
+} as const;
 
 export function DevicesDialog({
   open,
@@ -106,17 +115,22 @@ export function DevicesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Settings className="size-5 text-primary" /> Áudio e vídeo
+          <DialogTitle className="flex items-center gap-2 font-display tracking-wide">
+            <Settings className="size-5 text-accent" /> Áudio e vídeo
           </DialogTitle>
           <DialogDescription>Dispositivos da mesa</DialogDescription>
         </DialogHeader>
 
         {isHost ? (
           <div className="space-y-2">
-            <label className="text-sm font-medium">Câmeras da mesa</label>
+            <label className="font-display text-sm font-semibold tracking-wide text-accent">Câmeras da mesa</label>
+            <motion.div variants={list} initial="hidden" animate="show" className="space-y-2">
             {cameras.map((cam) => (
-              <div key={cam.id} className="flex items-center gap-2 rounded-md border border-border p-2">
+              <motion.div
+                key={cam.id}
+                variants={row}
+                className="flex items-center gap-2 rounded-lg border border-accent/15 bg-secondary/40 p-2 shadow-[var(--shadow-card)]"
+              >
                 <Switch
                   checked={cam.enabled}
                   onCheckedChange={() => onToggleCamera?.(cam.id)}
@@ -140,11 +154,14 @@ export function DevicesDialog({
                       </SelectContent>
                     </Select>
                     <Select value={cam.quality ?? "720"} onValueChange={(q) => onUpdateCamera?.(cam.id, { quality: q as CameraQuality })}>
-                      <SelectTrigger aria-label={`Qualidade de ${cam.name}`} className="h-8 w-20 shrink-0 text-xs">
+                      <SelectTrigger aria-label={`Qualidade de ${cam.name}`} className="h-8 w-28 shrink-0 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="720">720p</SelectItem>
+                        <SelectItem value="2160">2160p (4K)</SelectItem>
+                        <SelectItem value="1440">1440p</SelectItem>
+                        <SelectItem value="1080">1080p (Full HD)</SelectItem>
+                        <SelectItem value="720">720p (HD)</SelectItem>
                         <SelectItem value="540">540p</SelectItem>
                         <SelectItem value="360">360p</SelectItem>
                       </SelectContent>
@@ -154,24 +171,28 @@ export function DevicesDialog({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-8 shrink-0"
+                  className={cn(
+                    "size-8 shrink-0 rounded-full hover:text-accent hover:shadow-[var(--shadow-glow-gold)]",
+                    spotlight === `cam:${cam.id}` && "animate-glow-pulse text-accent",
+                  )}
                   aria-label={spotlight === `cam:${cam.id}` ? `Remover destaque de ${cam.name}` : `Destacar ${cam.name}`}
                   title={spotlight === `cam:${cam.id}` ? "Remover destaque" : "Destacar para todos"}
                   onClick={() => onSetSpotlight?.(spotlight === `cam:${cam.id}` ? null : `cam:${cam.id}`)}
                 >
-                  <Star className={cn("size-4", spotlight === `cam:${cam.id}` && "fill-warning text-warning")} />
+                  <Star className={cn("size-4", spotlight === `cam:${cam.id}` && "fill-accent")} />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-8 shrink-0"
+                  className="size-8 shrink-0 rounded-full hover:text-danger hover:shadow-[0_0_12px_rgba(239,68,68,0.35)]"
                   aria-label={`Remover ${cam.name}`}
                   onClick={() => onRemoveCamera?.(cam.id)}
                 >
                   <Trash2 className="size-4" />
                 </Button>
-              </div>
+              </motion.div>
             ))}
+            </motion.div>
             {cameras.length === 0 && (
               <p className="text-xs text-muted-foreground">Nenhuma câmera configurada. Adicione a câmera do mapa, do mestre ou de ângulos extras.</p>
             )}
@@ -197,7 +218,7 @@ export function DevicesDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="secondary" size="icon" className="shrink-0" aria-label="Adicionar câmera" onClick={addCamera} disabled={!newName.trim()}>
+              <Button variant="gold" size="icon" className="shrink-0 rounded-full" aria-label="Adicionar câmera" onClick={addCamera} disabled={!newName.trim()}>
                 <Plus className="size-4" />
               </Button>
             </div>
@@ -223,7 +244,7 @@ export function DevicesDialog({
           />
         ))}
 
-        <Button variant="secondary" onClick={() => void testSound()}>
+        <Button variant="outline-gold" className="self-start" onClick={() => void testSound()}>
           <Volume2 className="size-4" /> Testar som
         </Button>
         {notice && <p className="text-xs text-warning">{notice}</p>}
@@ -247,7 +268,7 @@ function DeviceSelect({
 }) {
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium">{label}</label>
+      <label className="font-display text-sm font-semibold tracking-wide text-accent">{label}</label>
       <Select value={value} onValueChange={onSelect}>
         <SelectTrigger aria-label={label}>
           <SelectValue />

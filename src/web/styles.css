@@ -1,31 +1,95 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@import "@fontsource/cinzel/400.css";
+@import "@fontsource/cinzel/600.css";
+@import "@fontsource/cinzel/700.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
 
 @theme {
-  --color-background: #0c0a12;
-  --color-foreground: #ede9f5;
-  --color-card: #15121d;
-  --color-popover: #1b1727;
-  --color-popover-foreground: #ede9f5;
-  --color-primary: #8b5cf6;
+  /* paleta inspirada no Diegesis Codex: navy tático + sky/cyan arcana */
+  --color-background: #090c12;
+  --color-foreground: #e6edf5;
+  --color-card: #101727;
+  --color-card-hover: #161d2e;
+  --color-popover: #161d2e;
+  --color-popover-foreground: #e6edf5;
+  --color-primary: #818cf8;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #211c30;
-  --color-secondary-foreground: #ede9f5;
-  --color-muted: #201b2d;
-  --color-muted-foreground: #8f87a3;
-  --color-accent: #f5c04e;
-  --color-accent-foreground: #241a05;
+  --color-secondary: #1a2334;
+  --color-secondary-foreground: #e6edf5;
+  --color-muted: #141c2c;
+  --color-muted-foreground: #94a3b8;
+  --color-accent: #38bdf8;
+  --color-accent-foreground: #04121d;
+  --color-gold-bright: #7dd3fc;
+  --color-gold-dim: #1e6d96;
+  --color-neon: #00f2fe;
   --color-success: #34d399;
   --color-warning: #f5a623;
   --color-danger: #f87171;
-  --color-destructive: #ef4444;
+  --color-destructive: #f43f5e;
   --color-destructive-foreground: #ffffff;
-  --color-border: #2b2637;
-  --color-input: #2b2637;
-  --color-ring: #8b5cf6;
-  --color-surface-hover: #1d1830;
+  --color-border: #1c2636;
+  --color-border-gold: #1e4a63;
+  --color-input: #1c2636;
+  --color-ring: #38bdf8;
+  --color-surface-hover: #16202f;
+
+  --shadow-glow-gold: 0 0 20px color-mix(in oklab, var(--color-accent) 35%, transparent);
+  --shadow-glow-gold-lg: 0 0 40px color-mix(in oklab, var(--color-accent) 45%, transparent);
+  --shadow-glow-violet: 0 0 24px color-mix(in oklab, var(--color-primary) 40%, transparent);
+  --shadow-card: 0 8px 32px rgb(0 0 0 / 0.5);
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Cinzel", "Inter", ui-serif, serif;
+
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-slide-up: slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-scale-in: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-glow-pulse: glow-pulse 2.4s ease-in-out infinite;
+  --animate-float: float 5s ease-in-out infinite;
+  --animate-shimmer: shimmer 2s linear infinite;
+  --animate-ember: ember linear infinite;
+  --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 12px color-mix(in oklab, var(--color-accent) 30%, transparent); }
+    50% { box-shadow: 0 0 28px color-mix(in oklab, var(--color-accent) 55%, transparent); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+  @keyframes ember {
+    from { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+    10% { opacity: var(--ember-opacity, 0.7); }
+    90% { opacity: var(--ember-opacity, 0.7); }
+    to { transform: translateY(-100vh) translateX(var(--ember-drift, 40px)) rotate(360deg); opacity: 0; }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.7; }
+  }
 }
 
 @layer base {
@@ -43,6 +107,34 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+    color: var(--color-gold-bright);
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--color-accent) 25%, transparent);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
 @utility no-scrollbar {
@@ -56,8 +148,22 @@
   font-family: var(--font-display);
 }
 
+@utility text-glow {
+  text-shadow:
+    0 0 16px color-mix(in oklab, var(--color-accent) 55%, transparent),
+    0 0 48px color-mix(in oklab, var(--color-accent) 25%, transparent);
+}
+
+@utility text-glow-violet {
+  text-shadow:
+    0 0 16px color-mix(in oklab, var(--color-primary) 55%, transparent),
+    0 0 48px color-mix(in oklab, var(--color-primary) 25%, transparent);
+}
+
 @utility voice-active {
-  box-shadow: 0 0 0 2px var(--color-success), 0 0 24px 0 color-mix(in oklab, var(--color-success) 40%, transparent);
+  box-shadow:
+    0 0 0 2px var(--color-success),
+    0 0 24px 0 color-mix(in oklab, var(--color-success) 40%, transparent);
 }
 
 @utility map-grid {
@@ -65,4 +171,35 @@
     linear-gradient(to right, color-mix(in oklab, var(--color-border) 60%, transparent) 1px, transparent 1px),
     linear-gradient(to bottom, color-mix(in oklab, var(--color-border) 60%, transparent) 1px, transparent 1px);
   background-size: 40px 40px;
+}
+
+@utility card-ornate {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--color-card) 92%, var(--color-accent) 4%), var(--color-card));
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--color-border));
+  box-shadow: var(--shadow-card);
+}
+
+@utility gold-shimmer-text {
+  background: linear-gradient(
+    100deg,
+    var(--color-gold-dim) 20%,
+    var(--color-gold-bright) 40%,
+    var(--color-accent) 50%,
+    var(--color-gold-bright) 60%,
+    var(--color-gold-dim) 80%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+@utility vignette {
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    color-mix(in oklab, var(--color-background) 80%, black) 100%
+  );
 }

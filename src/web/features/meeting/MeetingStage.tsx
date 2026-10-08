@@ -9,7 +9,7 @@ import { Button } from "@/web/components/ui/button";
 
 type Layout = "spotlight" | "gallery";
 
-const tileTransition = { type: "spring", stiffness: 350, damping: 32 } as const;
+const tileTransition = { type: "spring", stiffness: 320, damping: 30 } as const;
 
 export function MeetingStage({
   status,
@@ -58,12 +58,13 @@ export function MeetingStage({
           track: localCameraTracks[cam.id] ?? null,
           camera: true,
           local: true,
+          isHost: true,
         }))
       : [{ identity: "local", name: localName, track: Object.values(localCameraTracks)[0] ?? null, local: true }];
     const guestTiles: Tile[] = guests.flatMap((g): Tile[] =>
       g.isHost && g.cameras.length > 0
-        ? g.cameras.map((c) => ({ identity: `cam:${c.id}`, name: c.name, track: c.track, camera: true }))
-        : [{ identity: g.identity, name: g.name, track: g.cameraTrack, color: pickColor(g.identity) }],
+        ? g.cameras.map((c) => ({ identity: `cam:${c.id}`, name: c.name, track: c.track, camera: true, isHost: true }))
+        : [{ identity: g.identity, name: g.name, track: g.cameraTrack, isHost: g.isHost, color: pickColor(g.identity) }],
     );
     const screenTiles: Tile[] = guests
       .filter((g) => g.screenTrack)
@@ -105,30 +106,55 @@ export function MeetingStage({
   }
 
   return (
-    <div ref={stageRef} className="flex min-h-0 flex-1 flex-col bg-background">
-      <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 px-3 py-1.5">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className={cn("size-2 rounded-full", live ? "bg-success" : "bg-warning")} />
-            {statusText}
-            {sharing && <span className="text-success"> · Tela compartilhada</span>}
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant={layout === "spotlight" ? "secondary" : "ghost"} size="sm" onClick={() => setLayout("spotlight")}>
-              <Focus className="size-4" /> Destaque
-            </Button>
-            <Button variant={layout === "gallery" ? "secondary" : "ghost"} size="sm" onClick={() => setLayout("gallery")}>
-              <LayoutGrid className="size-4" /> Galeria
-            </Button>
-            <Button variant="ghost" size="icon" className="size-8" aria-label="Tela cheia" onClick={() => void fullscreen()}>
-              <Expand className="size-4" />
-            </Button>
-          </div>
-        </div>
+    <div ref={stageRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <div
+        aria-hidden
+        className="map-grid pointer-events-none absolute inset-0 opacity-30 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_80%)]"
+      />
+      <div aria-hidden className="vignette pointer-events-none absolute inset-0" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/8 via-transparent to-accent/5"
+      />
 
-        <LayoutGroup>
+      <div className="relative z-10 flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 px-3 py-1.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span
+            className={cn(
+              "size-2 rounded-full",
+              live ? "animate-pulse-dot bg-success shadow-[0_0_8px_color-mix(in_oklab,var(--color-success)_70%,transparent)]" : "bg-warning",
+            )}
+          />
+          <span className="font-display tracking-wide">{statusText}</span>
+          {sharing && <span className="text-success"> · Tela compartilhada</span>}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={layout === "spotlight" ? "secondary" : "ghost"}
+            size="sm"
+            className={cn(layout === "spotlight" && "shadow-[var(--shadow-glow-violet)]")}
+            onClick={() => setLayout("spotlight")}
+          >
+            <Focus className="size-4" /> Destaque
+          </Button>
+          <Button
+            variant={layout === "gallery" ? "secondary" : "ghost"}
+            size="sm"
+            className={cn(layout === "gallery" && "shadow-[var(--shadow-glow-violet)]")}
+            onClick={() => setLayout("gallery")}
+          >
+            <LayoutGrid className="size-4" /> Galeria
+          </Button>
+          <Button variant="ghost" size="icon" className="size-8 hover:text-accent" aria-label="Tela cheia" onClick={() => void fullscreen()}>
+            <Expand className="size-4" />
+          </Button>
+        </div>
+      </div>
+
+      <LayoutGroup>
         <div
           className={cn(
-            "min-h-0 flex-1 gap-3 overflow-auto p-3 pt-1",
+            "relative z-10 min-h-0 flex-1 gap-3 overflow-auto p-3 pt-1",
             layout === "gallery" ? "grid grid-cols-1 auto-rows-fr sm:grid-cols-2" : "flex",
           )}
         >
@@ -166,7 +192,10 @@ export function MeetingStage({
                   />
                 </motion.div>
               )}
-              <aside className="flex w-24 shrink-0 flex-col gap-2 overflow-y-auto sm:w-36 lg:w-44" aria-label="Vídeos dos participantes">
+              <aside
+                className="flex w-24 shrink-0 flex-col gap-2 overflow-y-auto sm:w-36 lg:w-44"
+                aria-label="Vídeos dos participantes"
+              >
                 {tiles
                   .filter((t) => t.identity !== focused?.identity)
                   .map((tile) => (
@@ -185,8 +214,8 @@ export function MeetingStage({
             </>
           )}
         </div>
-        </LayoutGroup>
-      </div>
+      </LayoutGroup>
+    </div>
   );
 }
 

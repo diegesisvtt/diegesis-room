@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteVideoTrack } from "livekit-client";
-import { RefreshCw, Users, Volume2 } from "lucide-react";
-import { api } from "@/web/lib/api";
+import { Loader2, RefreshCw, Sparkles, Volume2 } from "lucide-react";
+import { api, wsUrl, type Message } from "@/web/lib/api";
+import { animateRoll, parseRollPayload } from "@/web/features/dice/diceBox";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 
@@ -16,12 +18,23 @@ type StreamGuest = {
   speaking: boolean;
 };
 
+const gridVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.12 } },
+};
+
+const tileVariants = {
+  hidden: { opacity: 0, scale: 0.92 },
+  show: { opacity: 1, scale: 1, transition: { type: "spring" as const, stiffness: 140, damping: 20 } },
+};
+
 export function StreamPage() {
   const { channelId = "" } = useParams();
   const roomRef = useRef<Room | null>(null);
   const [status, setStatus] = useState<StreamStatus>("connecting");
   const [guests, setGuests] = useState<StreamGuest[]>([]);
   const [spotlight, setSpotlight] = useState<string | null>(null);
+  const connectingRef = useRef(false);
   const hostIdentityRef = useRef<string | null>(null);
   const rosterRef = useRef<{ id: string; name: string }[]>([]);
 
@@ -66,6 +79,8 @@ export function StreamPage() {
   }, []);
 
   const connect = useCallback(async () => {
+    if (connectingRef.current) return;
+    connectingRef.current = true;
     await roomRef.current?.disconnect();
     roomRef.current = null;
     setStatus("connecting");
@@ -107,6 +122,8 @@ export function StreamPage() {
     } catch (error) {
       console.error(error);
       setStatus("error");
+    } finally {
+      connectingRef.current = false;
     }
   }, [channelId, syncParticipants]);
 
@@ -114,6 +131,39 @@ export function StreamPage() {
     void connect();
     return () => void roomRef.current?.disconnect();
   }, [connect]);
+
+  // Escuta o chat do canal para animar as rolagens de dados também no modo streaming.
+  useEffect(() => {
+    let disposed = false;
+    let ws: WebSocket | null = null;
+    let reconnect: ReturnType<typeof setTimeout> | null = null;
+
+    function open() {
+      ws = new WebSocket(wsUrl(channelId));
+      ws.onmessage = (event) => {
+        let data: { type?: string; message?: Message };
+        try {
+          data = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (data.type === "message" && data.message?.kind === "roll") {
+          void animateRoll(parseRollPayload(data.message.rollJson));
+        }
+      };
+      ws.onclose = () => {
+        if (!disposed) reconnect = setTimeout(open, 1500);
+      };
+      ws.onerror = () => ws?.close();
+    }
+
+    open();
+    return () => {
+      disposed = true;
+      if (reconnect) clearTimeout(reconnect);
+      ws?.close();
+    };
+  }, [channelId]);
 
   const featured = (spotlight && guests.find((g) => g.identity === spotlight && g.track)) || null;
   const others = featured ? guests.filter((g) => g.identity !== featured.identity) : [];
@@ -127,29 +177,40 @@ export function StreamPage() {
       ) : guests.length === 0 ? (
         <EmptyStream />
       ) : featured ? (
-        <section className="flex min-h-0 flex-1 gap-3 p-3 lg:gap-4 lg:p-4" aria-label="Transmissão da mesa">
-          <div className="min-w-0 flex-1">
+        <motion.section
+          variants={gridVariants}
+          initial="hidden"
+          animate="show"
+          className="flex min-h-0 flex-1 gap-3 p-3 lg:gap-4 lg:p-4"
+          aria-label="Transmissão da mesa"
+        >
+          <motion.div variants={tileVariants} className="min-w-0 flex-1">
             <StreamVideoTile guest={featured} />
-          </div>
+          </motion.div>
           {others.length > 0 && (
             <aside className="flex w-40 shrink-0 flex-col gap-2 overflow-y-auto lg:w-56">
               {others.map((guest) => (
-                <div key={guest.identity} className="aspect-video shrink-0">
+                <motion.div key={guest.identity} variants={tileVariants} className="aspect-video shrink-0">
                   <StreamVideoTile guest={guest} />
-                </div>
+                </motion.div>
               ))}
             </aside>
           )}
-        </section>
+        </motion.section>
       ) : (
-        <section
+        <motion.section
+          variants={gridVariants}
+          initial="hidden"
+          animate="show"
           className={cn("grid min-h-0 flex-1 gap-3 p-3 lg:gap-4 lg:p-4", gridClass(guests.length))}
           aria-label="Jogadores remotos"
         >
           {guests.map((guest) => (
-            <StreamVideoTile key={guest.identity} guest={guest} />
+            <motion.div key={guest.identity} variants={tileVariants} className="min-h-0">
+              <StreamVideoTile guest={guest} />
+            </motion.div>
           ))}
-        </section>
+        </motion.section>
       )}
     </main>
   );
@@ -174,11 +235,18 @@ function StreamVideoTile({ guest }: { guest: StreamGuest }) {
   }, [guest.track]);
 
   return (
-    <article className={cn("relative h-full min-h-0 overflow-hidden rounded-md border bg-card", guest.speaking ? "voice-active border-success" : "border-border")}>
+    <article
+      className={cn(
+        "relative h-full min-h-0 overflow-hidden rounded-lg border bg-card transition-shadow duration-300",
+        guest.speaking ? "voice-active border-success" : "border-border-gold/30",
+      )}
+    >
       {guest.track ? (
         <video ref={videoRef} autoPlay playsInline className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full items-center justify-center bg-secondary text-5xl font-bold">{guest.name.slice(0, 2).toUpperCase()}</div>
+        <div className="font-display flex h-full items-center justify-center bg-secondary text-5xl font-bold text-accent/70">
+          {guest.name.slice(0, 2).toUpperCase()}
+        </div>
       )}
       <StreamLabel name={guest.name} speaking={guest.speaking} />
     </article>
@@ -187,10 +255,11 @@ function StreamVideoTile({ guest }: { guest: StreamGuest }) {
 
 function StreamLabel({ name, speaking }: { name: string; speaking: boolean }) {
   return (
-    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-background/75 px-5 py-3 backdrop-blur-sm">
-      <span className="truncate text-base font-semibold lg:text-lg">{name}</span>
+    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/85 via-black/50 to-transparent px-5 pt-8 pb-3">
+      <span className="font-display truncate text-base font-semibold tracking-wide lg:text-lg">{name}</span>
       {speaking && (
         <div className="flex items-center gap-2 text-sm font-medium text-success">
+          <span className="animate-pulse-dot size-2 rounded-full bg-success shadow-[0_0_10px_var(--color-success)]" />
           <Volume2 className="size-5" /> Falando
         </div>
       )}
@@ -201,36 +270,62 @@ function StreamLabel({ name, speaking }: { name: string; speaking: boolean }) {
 function StreamLoading() {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center">
-      <div className="text-center">
-        <div className="mx-auto mb-4 size-8 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-        <p className="text-sm font-medium text-white/70">Conectando…</p>
-      </div>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="text-center"
+      >
+        <Loader2 className="mx-auto mb-4 size-10 animate-spin text-accent" />
+        <p className="font-display text-glow gold-shimmer-text text-lg">Conectando…</p>
+      </motion.div>
     </div>
   );
 }
 
 function StreamError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-      <div className="text-center">
-        <p className="text-lg font-semibold text-white">Sem conexão</p>
-        <p className="mt-1 text-sm text-white/60">Não foi possível abrir a transmissão. Verifique a conexão e tente novamente.</p>
-        <Button className="mt-5" onClick={onRetry}>
+    <div className="relative flex min-h-0 flex-1 items-center justify-center px-6">
+      <div aria-hidden className="vignette pointer-events-none absolute inset-0" />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="relative text-center"
+      >
+        <p className="font-display text-glow text-2xl font-bold text-danger">Sem conexão</p>
+        <p className="mt-2 text-sm text-white/60">
+          Não foi possível abrir a transmissão. Verifique a conexão e tente novamente.
+        </p>
+        <Button variant="outline-gold" className="mt-6" onClick={onRetry}>
           <RefreshCw className="size-4" /> Tentar novamente
         </Button>
-      </div>
+      </motion.div>
     </div>
   );
 }
 
 function EmptyStream() {
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-      <div className="text-center">
-        <Users className="mx-auto mb-3 size-8 text-white/60" />
-        <p className="text-lg font-semibold text-white">Aguardando jogadores remotos</p>
-        <p className="mt-1 text-sm text-white/60">Os vídeos aparecerão aqui assim que entrarem na sala.</p>
-      </div>
+    <div className="relative flex min-h-0 flex-1 items-center justify-center px-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,color-mix(in_oklab,var(--color-accent)_6%,transparent),transparent_65%)]"
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="relative text-center"
+      >
+        <div className="animate-float mx-auto mb-5 flex size-16 items-center justify-center rounded-full border border-accent/30 bg-accent/10 shadow-[var(--shadow-glow-gold)]">
+          <Sparkles className="size-8 text-accent" />
+        </div>
+        <p className="font-display text-glow gold-shimmer-text text-2xl font-bold tracking-wide">
+          Aguardando jogadores remotos
+        </p>
+        <p className="mt-2 text-sm text-white/60">Os vídeos aparecerão aqui assim que entrarem na sala.</p>
+      </motion.div>
     </div>
   );
 }

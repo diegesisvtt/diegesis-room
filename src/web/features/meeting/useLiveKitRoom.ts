@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createLocalVideoTrack, Room, RoomEvent, Track, VideoPresets } from "livekit-client";
 import type { LocalVideoTrack, RemoteVideoTrack } from "livekit-client";
 import { api, type TokenResponse } from "@/web/lib/api";
+import { loadSession, peekProfileToken } from "@/web/lib/session";
 
 export type RoomStatus = "idle" | "connecting" | "live" | "error";
 
@@ -16,7 +17,16 @@ export type RemoteGuest = {
   screenTrack: RemoteVideoTrack | null;
 };
 
-export type CameraQuality = "360" | "540" | "720";
+export type CameraQuality = "360" | "540" | "720" | "1080" | "1440" | "2160";
+
+const qualityPresets: Record<CameraQuality, { preset: (typeof VideoPresets)[keyof typeof VideoPresets]; simulcast: (typeof VideoPresets)[keyof typeof VideoPresets][] }> = {
+  "360": { preset: VideoPresets.h360, simulcast: [VideoPresets.h180] },
+  "540": { preset: VideoPresets.h540, simulcast: [VideoPresets.h180] },
+  "720": { preset: VideoPresets.h720, simulcast: [VideoPresets.h360, VideoPresets.h180] },
+  "1080": { preset: VideoPresets.h1080, simulcast: [VideoPresets.h540, VideoPresets.h360, VideoPresets.h180] },
+  "1440": { preset: VideoPresets.h1440, simulcast: [VideoPresets.h720, VideoPresets.h360, VideoPresets.h180] },
+  "2160": { preset: VideoPresets.h2160, simulcast: [VideoPresets.h1080, VideoPresets.h540, VideoPresets.h180] },
+};
 
 export type HostCamera = { id: string; name: string; deviceId: string; enabled: boolean; quality?: CameraQuality };
 
@@ -70,6 +80,7 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
   const [spotlight, setSpotlightState] = useState<string | null>(() => (role === "host" ? loadSpotlight() : null));
   const [cameraErrors, setCameraErrors] = useState<Record<string, string>>({});
   const localIdentityRef = useRef("local");
+  const connectingRef = useRef(false);
   const hostCamerasRef = useRef(hostCameras);
   const spotlightRef = useRef(spotlight);
   const hostIdentityRef = useRef<string | null>(null);
@@ -143,9 +154,7 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
   async function publishCamera(cam: HostCamera) {
     const room = roomRef.current;
     if (!room || room.localParticipant.getTrackPublicationByName(cam.id)) return;
-    const quality = cam.quality ?? "720";
-    const preset = { "360": VideoPresets.h360, "540": VideoPresets.h540, "720": VideoPresets.h720 }[quality];
-    const simulcastLayers = { "360": [VideoPresets.h180], "540": [VideoPresets.h180], "720": [VideoPresets.h360, VideoPresets.h180] }[quality];
+    const { preset, simulcast } = qualityPresets[cam.quality ?? "720"];
     try {
       const track = await createLocalVideoTrack({
         resolution: preset.resolution,
@@ -154,7 +163,7 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
       await room.localParticipant.publishTrack(track, {
         source: Track.Source.Camera,
         name: cam.id,
-        videoSimulcastLayers: simulcastLayers,
+        videoSimulcastLayers: simulcast,
       });
       setCameraErrors((current) => {
         if (!(cam.id in current)) return current;
@@ -190,14 +199,16 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
   }
 
   const connect = useCallback(async () => {
-    if (status === "connecting" || status === "live") return;
+    if (connectingRef.current || status === "connecting" || status === "live") return;
+    connectingRef.current = true;
     setStatus("connecting");
     try {
+      const session = loadSession();
       const credentials: TokenResponse = await api.getToken({
         channelId,
         participantName,
-        role,
         audience,
+        profileToken: session ? peekProfileToken(session.campaignId) : undefined,
       });
       const room = new Room({ dynacast: true });
       const sync = () => {
@@ -246,6 +257,8 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
     } catch (error) {
       console.error(error);
       setStatus("error");
+    } finally {
+      connectingRef.current = false;
     }
   }, [status, channelId, participantName, role, audience, micOn, cameraOn, syncGuests, syncLocal, broadcastCameras]);
 
