@@ -1,4 +1,5 @@
 import { useMemo, type CSSProperties } from "react";
+import { usePreferences } from "@/web/lib/preferences";
 
 interface Ember {
   left: string;
@@ -24,6 +25,9 @@ export function EmberParticles({ count = 20 }: { count?: number }) {
       })),
     [count],
   );
+
+  const { visualEffects } = usePreferences();
+  if (!visualEffects) return null;
 
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">

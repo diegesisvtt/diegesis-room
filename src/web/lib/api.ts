@@ -1,3 +1,5 @@
+import type { UserPreferences } from "./preferences";
+
 export type Campaign = {
   id: string;
   name: string;
@@ -242,6 +244,11 @@ export const api = {
   getLiveKitSettings: () => request<LiveKitSettings>("/api/settings/livekit"),
   saveLiveKitSettings: (input: { url?: string; apiKey?: string; apiSecret?: string }) =>
     request<LiveKitSettings>("/api/settings/livekit", { method: "PUT", body: JSON.stringify(input) }),
+
+  // Preferences (per user, synced to the backend)
+  getPreferences: () => request<UserPreferences>("/api/preferences"),
+  savePreferences: (patch: Partial<UserPreferences>) =>
+    request<UserPreferences>("/api/preferences", { method: "PUT", body: JSON.stringify(patch) }),
 };
 
 export function wsUrl(channelId: string, since?: string, profileToken?: string): string {
