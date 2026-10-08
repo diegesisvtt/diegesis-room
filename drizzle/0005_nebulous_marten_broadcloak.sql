@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `profiles_campaign_user_idx` ON `profiles` (`campaign_id`,`user_id`);

@@ -22,6 +22,27 @@
       "when": 1791339177845,
       "tag": "0002_busy_krista_starr",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791406003096,
+      "tag": "0003_campaign_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791421144222,
+      "tag": "0004_next_shadowcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791423161580,
+      "tag": "0005_nebulous_marten_broadcloak",
+      "breakpoints": true
     }
   ]
 }
