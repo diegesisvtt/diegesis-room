@@ -200,10 +200,11 @@ fi
 log "Bun: $BUN_BIN"
 
 # ---- usuário dedicado ----------------------------------------------------
-if ! id "$APP" >/dev/null 2>&1; then
+# Usa grep em /etc/passwd e /etc/group (em vez de `id`), porque o `id` do
+# busybox (Alpine) pode retornar 0 mesmo para usuários/grupos inexistentes.
+if ! grep -q "^${APP}:" /etc/passwd 2>/dev/null; then
   log "Criando usuário '$APP'"
   if command -v apk >/dev/null 2>&1; then
-    # Alpine (busybox adduser): cria usuário e grupo de mesmo nome.
     adduser -D -H "$APP" || die "Falha ao criar o usuário '$APP' (adduser)."
   elif command -v useradd >/dev/null 2>&1; then
     useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$APP" || die "Falha ao criar o usuário '$APP' (useradd)."
@@ -212,8 +213,19 @@ if ! id "$APP" >/dev/null 2>&1; then
   fi
 fi
 
-# Confirma que o usuário existe antes do chown.
-id "$APP" >/dev/null 2>&1 || die "O usuário '$APP' não foi criado corretamente."
+# Garante o grupo (cobre o caso de um usuário já existir sem grupo, ex. de
+# uma tentativa anterior com `adduser -S`).
+if ! grep -q "^${APP}:" /etc/group 2>/dev/null; then
+  if command -v addgroup >/dev/null 2>&1; then
+    addgroup "$APP" 2>/dev/null || true
+  elif command -v groupadd >/dev/null 2>&1; then
+    groupadd "$APP" 2>/dev/null || true
+  fi
+fi
+
+# Verificação final antes do chown.
+grep -q "^${APP}:" /etc/passwd 2>/dev/null || die "O usuário '$APP' não foi criado."
+grep -q "^${APP}:" /etc/group 2>/dev/null || die "O grupo '$APP' não foi criado."
 chown -R "$APP:$APP" "$INSTALL_DIR"
 
 # ---- serviço -------------------------------------------------------------
