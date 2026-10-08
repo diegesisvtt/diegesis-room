@@ -260,7 +260,12 @@ function StreamVideoTile({ guest }: { guest: StreamGuest }) {
       )}
     >
       {guest.track ? (
-        <video ref={videoRef} autoPlay playsInline className="h-full w-full object-cover" />
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className={cn("h-full w-full", guest.identity.startsWith("screen:") ? "object-contain" : "object-cover")}
+        />
       ) : guest.photoUrl ? (
         <div className="flex h-full items-center justify-center bg-secondary">
           <img src={guest.photoUrl} alt={guest.name} className="size-24 rounded-full object-cover shadow-[var(--shadow-glow-gold)] lg:size-32" />
