@@ -124,7 +124,8 @@ Crie um projeto em <https://cloud.livekit.io> e cole a URL (`wss://...`) e as cr
 
 O release é automatizado por GitHub Actions (`.github/workflows/release.yml`). Ao publicar
 uma tag `v*` na `main`, ele builda o app, empacota num `.tar.gz` e publica um GitHub Release
-com os assets (`diegesis-room-<versão>.tar.gz`, `diegesis-room.tar.gz`, `install.sh` e `SHA256SUMS.txt`).
+com os assets (`diegesis-room-<versão>.tar.gz`, `diegesis-room.tar.gz`, `install-docker.sh`,
+`install-systemd.sh` e `SHA256SUMS.txt`).
 
 ### Criando um release
 
@@ -141,45 +142,56 @@ git push origin v0.2.0   # dispara o workflow de release
 
 ### Instalando no servidor (um comando)
 
+Há dois instaladores — escolha um e rode um único comando:
+
+**Docker** (o container já embute o Bun; só precisa de Docker no servidor):
+
 ```sh
-# Interativo (pergunta LiveKit / URL pública)
-curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh -o install.sh
-sh install.sh
+curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install-docker.sh \
+  | sh
 ```
 
-> **Repositório privado?** O download dos assets exige autenticação. Use um token
-> (PAT com escopo `repo` ou fine-grained com "Contents: Read"):
->
-> ```sh
-> curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
->   https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh -o install.sh
-> GH_TOKEN=$GH_TOKEN sh install.sh
-> ```
-
-O script detecta o ambiente e suporta três formas de rodar:
-
-| Modo | Comando | Requisito |
-| --- | --- | --- |
-| Docker (padrão) | `sh install.sh` | Docker instalado |
-| systemd (Linux padrão) | `MODE=systemd sh install.sh` | systemd; Bun é instalado automaticamente |
-| OpenRC (Alpine) | `MODE=systemd sh install.sh` | Alpine/OpenRC; Bun é instalado automaticamente |
-
-O `MODE=systemd` detecta automaticamente o init system (systemd ou OpenRC). Outras opções
-via flag ou variável de ambiente: `--version v0.2.0`, `--dir /opt/diegesis-room`,
-`--port 3000`, `--non-interactive`.
-
-Instalação não-interativa (CI/scripts):
+**systemd / OpenRC** (Bun puro; detecta o init system — systemd no Debian/Ubuntu,
+OpenRC no Alpine — e instala o Bun automaticamente):
 
 ```sh
-curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install.sh | \
-  env MODE=systemd LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... \
-      PUBLIC_URL=https://meu.dominio sh
+curl -fsSL https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install-systemd.sh \
+  | sh
+```
+
+> **Repositório privado?** O download dos assets exige autenticação (PAT com escopo `repo`
+> ou fine-grained com "Contents: Read"). Adicione o header no `curl` e passe o token ao `sh`:
+>
+> ```sh
+> export GH_TOKEN="github_pat_XXXX"
+> curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+>   https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install-systemd.sh \
+>   | GH_TOKEN=$GH_TOKEN sh
+> ```
+
+Configuração opcional via variáveis de ambiente (ou flags `--dir`, `--port`, `--version`):
+
+| Variável | Padrão | Descrição |
+| --- | --- | --- |
+| `VERSION` | `latest` | Tag específica (ex: `v0.2.0`) |
+| `INSTALL_DIR` | `/opt/diegesis-room` | Diretório de instalação |
+| `PORT` | `3000` | Porta HTTP |
+| `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | vazio | LiveKit (vazio = modo demo, configurável depois pela UI) |
+| `PUBLIC_URL` | `http://localhost:<porta>` | Origem pública usada nos links de convite |
+
+Para instalação **interativa** (o script pergunta LiveKit/URL), baixe o script e rode:
+
+```sh
+curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+  https://github.com/diegesisvtt/diegesis-room/releases/latest/download/install-systemd.sh \
+  -o install-systemd.sh
+GH_TOKEN=$GH_TOKEN sh install-systemd.sh
 ```
 
 ### Atualizando
 
 Rode o mesmo comando de instalação. O script preserva o `.env` e o `data/` (SQLite) e
-recarrega o serviço. Para rollback, instale uma versão específica com `--version v0.1.0`.
+recarrega o serviço. Para rollback, instale uma versão específica com `VERSION=v0.1.0`.
 
 ## Notas de implementação
 

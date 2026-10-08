@@ -67,8 +67,9 @@ jobs:
           cp Dockerfile release/
           cp docker-compose.yml release/
           cp .env.example release/
-          cp scripts/install.sh release/install.sh
-          chmod +x release/install.sh
+          cp scripts/install-docker.sh release/install-docker.sh
+          cp scripts/install-systemd.sh release/install-systemd.sh
+          chmod +x release/install-docker.sh release/install-systemd.sh
 
           tar -czf "diegesis-room-${VERSION}.tar.gz" -C release .
           cp "diegesis-room-${VERSION}.tar.gz" "diegesis-room.tar.gz"
@@ -82,4 +83,5 @@ jobs:
             diegesis-room-${{ steps.version.outputs.version }}.tar.gz
             diegesis-room.tar.gz
             SHA256SUMS.txt
-            scripts/install.sh
+            scripts/install-docker.sh
+            scripts/install-systemd.sh
