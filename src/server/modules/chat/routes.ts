@@ -61,7 +61,9 @@ export const chatRoutes = new Elysia({ prefix: "/channels" }).use(authPlugin)
 // Connected sockets per channel. Delivery is driven by the messages table
 // (see the watcher below), so messages written by any instance — or while a
 // client was disconnected — still reach subscribers.
-type Socket = { send: (data: string) => void };
+// NOTE: Elysia creates a new ElysiaWS wrapper per event, so socket identity
+// must go through `ws.raw` (the stable Bun ServerWebSocket), never `ws`.
+type Socket = { send: (data: string) => void; close: () => void };
 type MessageRow = NonNullable<Awaited<ReturnType<typeof createMessage>>>;
 
 const subscribers = new Map<string, Set<Socket>>();
@@ -152,17 +154,17 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
         ws.close();
         return;
       }
-      authorizedSockets.add(ws);
+      authorizedSockets.add(ws.raw);
       if (profileToken) {
-        socketProfileTokens.set(ws, profileToken);
+        socketProfileTokens.set(ws.raw, profileToken);
         let set = socketsByProfileToken.get(profileToken);
         if (!set) {
           set = new Set();
           socketsByProfileToken.set(profileToken, set);
         }
-        set.add(ws);
+        set.add(ws.raw);
       }
-      subscribe(channelId, ws);
+      subscribe(channelId, ws.raw);
       // On reconnect the client passes ?since=<lastMessageId> to fill only the gap.
       const since = ws.data.query.since;
       const pending = since
@@ -180,18 +182,18 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
   },
   close(ws) {
     const channelId = ws.data.params.id;
-    const profileToken = socketProfileTokens.get(ws);
+    const profileToken = socketProfileTokens.get(ws.raw);
     if (profileToken) {
       const set = socketsByProfileToken.get(profileToken);
-      set?.delete(ws);
+      set?.delete(ws.raw);
       if (set && set.size === 0) socketsByProfileToken.delete(profileToken);
     }
-    unsubscribe(channelId, ws);
+    unsubscribe(channelId, ws.raw);
   },
   message(ws, raw) {
-    if (!authorizedSockets.has(ws)) return;
+    if (!authorizedSockets.has(ws.raw)) return;
     const channelId = ws.data.params.id;
-    const profileToken = socketProfileTokens.get(ws);
+    const profileToken = socketProfileTokens.get(ws.raw);
     // Elysia auto-parses JSON string frames into objects.
     let data: { type?: string; authorName?: string; body?: string; kind?: "text" | "roll" | "system"; rollJson?: string };
     if (typeof raw === "string") {
