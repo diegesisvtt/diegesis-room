@@ -11,6 +11,7 @@ export type Tile = {
   identity: string;
   name: string;
   track: LocalVideoTrack | RemoteVideoTrack | null;
+  photoUrl?: string | null;
   camera?: boolean;
   local?: boolean;
   screen?: boolean;
@@ -82,15 +83,23 @@ export function VideoTile({
         </div>
       ) : (
         <div className="flex h-full items-center justify-center">
-          <div
-            className={cn(
-              "flex items-center justify-center rounded-full font-bold text-primary-foreground shadow-[var(--shadow-glow-violet)]",
-              large ? "size-20 text-2xl" : "size-9 text-xs",
-              tile.color || "bg-primary",
-            )}
-          >
-            {tile.screen ? <MonitorUp /> : initials(tile.name)}
-          </div>
+          {tile.photoUrl && !tile.screen ? (
+            <img
+              src={tile.photoUrl}
+              alt={tile.name}
+              className={cn("rounded-full object-cover shadow-[var(--shadow-glow-violet)]", large ? "size-20" : "size-9")}
+            />
+          ) : (
+            <div
+              className={cn(
+                "flex items-center justify-center rounded-full font-bold text-primary-foreground shadow-[var(--shadow-glow-violet)]",
+                large ? "size-20 text-2xl" : "size-9 text-xs",
+                tile.color || "bg-primary",
+              )}
+            >
+              {tile.screen ? <MonitorUp /> : initials(tile.name)}
+            </div>
+          )}
         </div>
       )}
 

@@ -23,6 +23,7 @@ export function MeetingStage({
   speakers,
   localIdentity,
   localName,
+  localPhotoUrl,
   isHost,
   spotlight,
   onSpotlightChange,
@@ -38,6 +39,7 @@ export function MeetingStage({
   speakers: string[];
   localIdentity: string;
   localName: string;
+  localPhotoUrl?: string | null;
   isHost: boolean;
   spotlight: string | null;
   onSpotlightChange?: (tile: string | null) => void;
@@ -60,11 +62,11 @@ export function MeetingStage({
           local: true,
           isHost: true,
         }))
-      : [{ identity: "local", name: localName, track: Object.values(localCameraTracks)[0] ?? null, local: true }];
+      : [{ identity: "local", name: localName, track: Object.values(localCameraTracks)[0] ?? null, local: true, photoUrl: localPhotoUrl }];
     const guestTiles: Tile[] = guests.flatMap((g): Tile[] =>
       g.isHost && g.cameras.length > 0
         ? g.cameras.map((c) => ({ identity: `cam:${c.id}`, name: c.name, track: c.track, camera: true, isHost: true }))
-        : [{ identity: g.identity, name: g.name, track: g.cameraTrack, isHost: g.isHost, color: pickColor(g.identity) }],
+        : [{ identity: g.identity, name: g.name, track: g.cameraTrack, isHost: g.isHost, photoUrl: g.photoUrl, color: pickColor(g.identity) }],
     );
     const screenTiles: Tile[] = guests
       .filter((g) => g.screenTrack)
@@ -74,7 +76,7 @@ export function MeetingStage({
       : null;
 
     return [...localTiles, ...guestTiles, ...screenTiles, ...(localScreenTile ? [localScreenTile] : [])];
-  }, [guests, hostCameras, localCameraTracks, localScreenTrack, sharing, isHost, localName, localIdentity]);
+  }, [guests, hostCameras, localCameraTracks, localScreenTrack, sharing, isHost, localName, localPhotoUrl, localIdentity]);
 
   const focused = tiles.find((t) => t.identity === pinned) ?? tiles.find((t) => t.camera) ?? tiles[0];
 

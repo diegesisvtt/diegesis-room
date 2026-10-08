@@ -25,6 +25,7 @@ export function VoiceStage({
   const [devicesOpen, setDevicesOpen] = useState(false);
 
   const meeting = useLiveKitRoom({
+    campaignId: session.campaignId,
     channelId,
     participantName: myName,
     role: session.role,
@@ -107,6 +108,7 @@ export function VoiceStage({
         speakers={meeting.speakers}
         localIdentity={meeting.localIdentity}
         localName={myName}
+        localPhotoUrl={session.photoUrl ?? null}
         isHost={isHost}
         spotlight={meeting.spotlight}
         onSpotlightChange={isHost ? meeting.setSpotlight : undefined}

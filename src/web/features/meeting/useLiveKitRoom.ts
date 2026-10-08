@@ -12,10 +12,27 @@ export type RemoteGuest = {
   identity: string;
   name: string;
   isHost: boolean;
+  photoUrl: string | null;
   cameras: RemoteCamera[];
   cameraTrack: RemoteVideoTrack | null;
   screenTrack: RemoteVideoTrack | null;
 };
+
+type ParticipantMeta = { photo: string | null; audience: boolean };
+
+function parseMetadata(metadata: string | undefined): ParticipantMeta {
+  if (!metadata) return { photo: null, audience: false };
+  try {
+    const data = JSON.parse(metadata) as { photo?: unknown; audience?: unknown };
+    return { photo: typeof data.photo === "string" ? data.photo : null, audience: data.audience === true };
+  } catch {
+    return { photo: null, audience: false };
+  }
+}
+
+function isAudience(participant: { metadata?: string; permissions?: { canPublish?: boolean } }): boolean {
+  return participant.permissions?.canPublish === false || parseMetadata(participant.metadata).audience;
+}
 
 export type CameraQuality = "360" | "540" | "720" | "1080" | "1440" | "2160";
 
@@ -36,21 +53,28 @@ type CamerasMessage = { type: "cameras"; cameras: { id: string; name: string }[]
 type DataMessage = { type: "signal"; hand?: boolean; reaction?: string } | CamerasMessage | { type: "cameras-request" };
 
 const TOPIC = "mesa-data";
-const CAMERAS_KEY = "diegesis:cameras";
-const SPOTLIGHT_KEY = "diegesis:spotlight";
 
-function loadCameras(): HostCamera[] {
+function camerasKey(campaignId: string) {
+  return `diegesis:cameras:${campaignId}`;
+}
+
+function spotlightKey(campaignId: string) {
+  return `diegesis:spotlight:${campaignId}`;
+}
+
+function loadCameras(key: string): HostCamera[] {
   try {
-    const raw = localStorage.getItem(CAMERAS_KEY);
-    return raw ? (JSON.parse(raw) as HostCamera[]) : [];
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    return (JSON.parse(raw) as HostCamera[]).map((cam) => ({ ...cam, enabled: false }));
   } catch {
     return [];
   }
 }
 
-function loadSpotlight(): string | null {
+function loadSpotlight(key: string): string | null {
   try {
-    const raw = localStorage.getItem(SPOTLIGHT_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     return raw.startsWith("cam-") ? `cam:${raw}` : raw;
   } catch {
@@ -59,17 +83,19 @@ function loadSpotlight(): string | null {
 }
 
 export type UseLiveKitRoomOptions = {
+  campaignId: string;
   channelId: string;
   participantName: string;
   role: "host" | "guest";
   audience?: boolean;
 };
 
-export function useLiveKitRoom({ channelId, participantName, role, audience = false }: UseLiveKitRoomOptions) {
+export function useLiveKitRoom({ campaignId, channelId, participantName, role, audience = false }: UseLiveKitRoomOptions) {
+  const storageKeys = useRef({ cameras: camerasKey(campaignId), spotlight: spotlightKey(campaignId) }).current;
   const roomRef = useRef<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus>("idle");
   const [guests, setGuests] = useState<RemoteGuest[]>([]);
-  const [hostCameras, setHostCameras] = useState<HostCamera[]>(() => (role === "host" ? loadCameras() : []));
+  const [hostCameras, setHostCameras] = useState<HostCamera[]>(() => (role === "host" ? loadCameras(storageKeys.cameras) : []));
   const [localCameraTracks, setLocalCameraTracks] = useState<Record<string, LocalVideoTrack>>({});
   const [localScreenTrack, setLocalScreenTrack] = useState<LocalVideoTrack | null>(null);
   const [micOn, setMicOn] = useState(true);
@@ -77,7 +103,7 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
   const [sharing, setSharing] = useState(false);
   const [signals, setSignals] = useState<Record<string, Signal>>({});
   const [speakers, setSpeakers] = useState<string[]>([]);
-  const [spotlight, setSpotlightState] = useState<string | null>(() => (role === "host" ? loadSpotlight() : null));
+  const [spotlight, setSpotlightState] = useState<string | null>(() => (role === "host" ? loadSpotlight(storageKeys.spotlight) : null));
   const [cameraErrors, setCameraErrors] = useState<Record<string, string>>({});
   const localIdentityRef = useRef("local");
   const connectingRef = useRef(false);
@@ -89,26 +115,30 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
   const syncGuests = useCallback((room: Room) => {
     const roster = rosterRef.current;
     const hostId = hostIdentityRef.current;
-    const list = Array.from(room.remoteParticipants.values()).map((participant) => {
-      const cameraPubs = Array.from(participant.trackPublications.values()).filter(
-        (pub) => pub.source === Track.Source.Camera,
-      );
-      const isHost = participant.identity === hostId;
-      const cameras: RemoteCamera[] = cameraPubs.map((pub) => ({
-        id: pub.trackName,
-        name: (isHost && roster.find((c) => c.id === pub.trackName)?.name) || participant.name || participant.identity,
-        track: (pub.track as RemoteVideoTrack | undefined) ?? null,
-      }));
-      const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);
-      return {
-        identity: participant.identity,
-        name: participant.name || participant.identity,
-        isHost,
-        cameras,
-        cameraTrack: cameras[0]?.track ?? null,
-        screenTrack: (screenPub?.track as RemoteVideoTrack | undefined) ?? null,
-      };
-    });
+    const list = Array.from(room.remoteParticipants.values())
+      // Audiência (modo streaming) é subscribe-only: nunca aparece no palco.
+      .filter((participant) => !isAudience(participant))
+      .map((participant) => {
+        const cameraPubs = Array.from(participant.trackPublications.values()).filter(
+          (pub) => pub.source === Track.Source.Camera,
+        );
+        const isHost = participant.identity === hostId;
+        const cameras: RemoteCamera[] = cameraPubs.map((pub) => ({
+          id: pub.trackName,
+          name: (isHost && roster.find((c) => c.id === pub.trackName)?.name) || participant.name || participant.identity,
+          track: (pub.track as RemoteVideoTrack | undefined) ?? null,
+        }));
+        const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);
+        return {
+          identity: participant.identity,
+          name: participant.name || participant.identity,
+          isHost,
+          photoUrl: parseMetadata(participant.metadata).photo,
+          cameras,
+          cameraTrack: cameras[0]?.track ?? null,
+          screenTrack: (screenPub?.track as RemoteVideoTrack | undefined) ?? null,
+        };
+      });
     setGuests(list);
   }, []);
 
@@ -142,7 +172,7 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
       setHostCameras(next);
       hostCamerasRef.current = next;
       try {
-        localStorage.setItem(CAMERAS_KEY, JSON.stringify(next));
+        localStorage.setItem(storageKeys.cameras, JSON.stringify(next));
       } catch {
         /* ignore */
       }
@@ -241,9 +271,6 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
       localIdentityRef.current = room.localParticipant.identity;
       await room.localParticipant.setMicrophoneEnabled(micOn);
       if (role === "host") {
-        for (const cam of hostCamerasRef.current) {
-          if (cam.enabled) await publishCamera(cam);
-        }
         broadcastCameras(hostCamerasRef.current, spotlightRef.current);
       } else {
         if (cameraOn) await room.localParticipant.setCameraEnabled(true);
@@ -360,8 +387,8 @@ export function useLiveKitRoom({ channelId, participantName, role, audience = fa
       setSpotlightState(id);
       spotlightRef.current = id;
       try {
-        if (id) localStorage.setItem(SPOTLIGHT_KEY, id);
-        else localStorage.removeItem(SPOTLIGHT_KEY);
+        if (id) localStorage.setItem(storageKeys.spotlight, id);
+        else localStorage.removeItem(storageKeys.spotlight);
       } catch {
         /* ignore */
       }

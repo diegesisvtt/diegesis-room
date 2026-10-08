@@ -15,8 +15,21 @@ type StreamGuest = {
   identity: string;
   name: string;
   track: RemoteVideoTrack | null;
+  photoUrl: string | null;
   speaking: boolean;
 };
+
+type ParticipantMeta = { photo: string | null; audience: boolean };
+
+function parseMetadata(metadata: string | undefined): ParticipantMeta {
+  if (!metadata) return { photo: null, audience: false };
+  try {
+    const data = JSON.parse(metadata) as { photo?: unknown; audience?: unknown };
+    return { photo: typeof data.photo === "string" ? data.photo : null, audience: data.audience === true };
+  } catch {
+    return { photo: null, audience: false };
+  }
+}
 
 const gridVariants = {
   hidden: {},
@@ -42,28 +55,32 @@ export function StreamPage() {
     const list: StreamGuest[] = [];
     const roster = rosterRef.current;
     for (const participant of room.remoteParticipants.values()) {
+      const meta = parseMetadata(participant.metadata);
+      // Audiência (outras telas de streaming) é subscribe-only: nunca aparece.
+      if (participant.permissions?.canPublish === false || meta.audience) continue;
+      const photoUrl = meta.photo;
       const cameraPubs = Array.from(participant.trackPublications.values()).filter(
         (pub) => pub.source === Track.Source.Camera,
       );
-      if (participant.identity === hostIdentityRef.current) {
+      if (participant.identity === hostIdentityRef.current && cameraPubs.length > 0) {
         for (const pub of cameraPubs) {
           list.push({
             identity: `cam:${pub.trackName}`,
             name: roster.find((c) => c.id === pub.trackName)?.name || participant.name || participant.identity,
             track: (pub.track as RemoteVideoTrack | undefined) ?? null,
+            photoUrl,
             speaking: participant.isSpeaking,
           });
         }
       } else {
         const cameraPub = cameraPubs[0];
-        if (cameraPub?.track) {
-          list.push({
-            identity: participant.identity,
-            name: participant.name || participant.identity,
-            track: cameraPub.track as RemoteVideoTrack,
-            speaking: participant.isSpeaking,
-          });
-        }
+        list.push({
+          identity: participant.identity,
+          name: participant.name || participant.identity,
+          track: (cameraPub?.track as RemoteVideoTrack | undefined) ?? null,
+          photoUrl,
+          speaking: participant.isSpeaking,
+        });
       }
       const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);
       if (screenPub?.track) {
@@ -71,6 +88,7 @@ export function StreamPage() {
           identity: `screen:${participant.identity}`,
           name: `${participant.name || participant.identity} · Tela`,
           track: screenPub.track as RemoteVideoTrack,
+          photoUrl: null,
           speaking: false,
         });
       }
@@ -243,6 +261,10 @@ function StreamVideoTile({ guest }: { guest: StreamGuest }) {
     >
       {guest.track ? (
         <video ref={videoRef} autoPlay playsInline className="h-full w-full object-cover" />
+      ) : guest.photoUrl ? (
+        <div className="flex h-full items-center justify-center bg-secondary">
+          <img src={guest.photoUrl} alt={guest.name} className="size-24 rounded-full object-cover shadow-[var(--shadow-glow-gold)] lg:size-32" />
+        </div>
       ) : (
         <div className="font-display flex h-full items-center justify-center bg-secondary text-5xl font-bold text-accent/70">
           {guest.name.slice(0, 2).toUpperCase()}
