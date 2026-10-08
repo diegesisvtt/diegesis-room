@@ -176,3 +176,25 @@ export const settings = sqliteTable("settings", {
     .notNull()
     .default(sql`(unixepoch())`),
 });
+
+// ---- Per-user preferences (media capture, appearance, etc.) ----
+export const userPreferences = sqliteTable("user_preferences", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  shareQuality: text("share_quality", { enum: ["720", "1080", "1440", "2160"] })
+    .notNull()
+    .default("1080"),
+  cameraQuality: text("camera_quality", { enum: ["360", "540", "720", "1080", "1440", "2160"] })
+    .notNull()
+    .default("720"),
+  echoCancellation: integer("echo_cancellation", { mode: "boolean" }).notNull().default(true),
+  noiseSuppression: integer("noise_suppression", { mode: "boolean" }).notNull().default(true),
+  autoGainControl: integer("auto_gain_control", { mode: "boolean" }).notNull().default(true),
+  visualEffects: integer("visual_effects", { mode: "boolean" }).notNull().default(true),
+  stereo: integer("stereo", { mode: "boolean" }).notNull().default(false),
+  contentHint: text("content_hint", { enum: ["detail", "text", "motion"] }).notNull().default("detail"),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
