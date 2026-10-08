@@ -1,8 +1,10 @@
 export type SessionRole = "host" | "guest";
+export type SessionStatus = "pending" | "active" | "banned";
 
 export type Session = {
   name: string;
   role: SessionRole;
+  status?: SessionStatus;
   campaignId: string;
   characterName?: string | null;
   photoUrl?: string | null;
@@ -53,6 +55,23 @@ export function getProfileToken(campaignId: string): string {
   tokens[campaignId] = token;
   localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
   return token;
+}
+
+/** Token existente (sem gerar um novo) — usado antes de criar perfil. */
+export function peekProfileToken(campaignId: string): string | undefined {
+  return loadTokens()[campaignId];
+}
+
+/** Guarda um token de perfil vindo do servidor (ex.: perfil do dono da campanha). */
+export function setProfileToken(campaignId: string, token: string) {
+  const tokens = loadTokens();
+  tokens[campaignId] = token;
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+}
+
+/** Mapa campaignId -> token, usado para vincular perfis ao criar conta/entrar. */
+export function getAllProfileTokens(): Record<string, string> {
+  return loadTokens();
 }
 
 function loadTokens(): Record<string, string> {
