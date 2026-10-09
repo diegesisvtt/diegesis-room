@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
-import { listMessages, listMessagesAfter, createMessage } from "./service";
+import { listMessages, listMessagesAfter, createMessage, getMessageImageFile } from "./service";
 import { db } from "../../db/client";
 import { channels } from "../../db/schema";
 import { memberGuard } from "../../lib/guards";
@@ -51,12 +51,25 @@ export const chatRoutes = new Elysia({ prefix: "/channels" }).use(authPlugin)
       body: t.Object({
         authorName: t.String(),
         body: t.String(),
-        kind: t.Optional(t.Union([t.Literal("text"), t.Literal("roll"), t.Literal("system")])),
+        kind: t.Optional(
+          t.Union([t.Literal("text"), t.Literal("roll"), t.Literal("system"), t.Literal("image")]),
+        ),
         rollJson: t.Optional(t.String()),
+        image: t.Optional(t.String({ maxLength: 6 * 1024 * 1024 })),
         profileToken: t.Optional(t.String()),
       }),
     },
-  );
+  )
+  .get("/messages/:id/image", async ({ params, set }) => {
+    const file = await getMessageImageFile(params.id);
+    if (!file) {
+      set.status = 404;
+      return { error: "Imagem não encontrada" };
+    }
+    set.headers["content-type"] = file.mime;
+    set.headers["cache-control"] = "public, max-age=31536000, immutable";
+    return Bun.file(file.path);
+  });
 
 // Connected sockets per channel. Delivery is driven by the messages table
 // (see the watcher below), so messages written by any instance — or while a
@@ -203,7 +216,14 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
     const channelId = ws.data.params.id;
     const profileToken = socketProfileTokens.get(ws.raw);
     // Elysia auto-parses JSON string frames into objects.
-    let data: { type?: string; authorName?: string; body?: string; kind?: "text" | "roll" | "system"; rollJson?: string };
+    let data: {
+      type?: string;
+      authorName?: string;
+      body?: string;
+      kind?: "text" | "roll" | "system" | "image";
+      rollJson?: string;
+      image?: string;
+    };
     if (typeof raw === "string") {
       try {
         data = JSON.parse(raw);
@@ -216,7 +236,9 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
       return;
     }
 
-    if (data.type !== "message" || !data.authorName || !data.body) return;
+    // Mensagens de imagem podem ter corpo vazio (a legenda é opcional).
+    if (data.type !== "message" || !data.authorName) return;
+    if (!data.body && !data.image) return;
 
     // Revalida o membership a cada mensagem: ban/kick durante a sessão
     // interrompem o participante sem esperar ele fechar a aba.
@@ -231,9 +253,10 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
       }
       const message = await createMessage(channelId, {
         authorName: data.authorName!,
-        body: data.body!,
+        body: data.body ?? "",
         kind: data.kind,
         rollJson: data.rollJson,
+        image: data.image,
       });
       if (message) deliver(channelId, [message]);
     })();
