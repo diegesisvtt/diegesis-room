@@ -1,0 +1,1 @@
+ALTER TABLE `user_preferences` ADD `segmentation_quality` text DEFAULT 'quality' NOT NULL;

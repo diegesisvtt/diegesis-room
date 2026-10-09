@@ -99,9 +99,11 @@ export const messages = sqliteTable(
       .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
     authorName: text("author_name").notNull(),
-    kind: text("kind", { enum: ["text", "roll", "system"] }).notNull().default("text"),
+    kind: text("kind", { enum: ["text", "roll", "system", "image"] }).notNull().default("text"),
     body: text("body").notNull().default(""),
     rollJson: text("roll_json"),
+    imagePath: text("image_path"),
+    imageMime: text("image_mime"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
@@ -177,6 +179,47 @@ export const settings = sqliteTable("settings", {
     .default(sql`(unixepoch())`),
 });
 
+// ---- User-uploaded virtual backgrounds (global, synced to the account) ----
+export const userBackgrounds = sqliteTable(
+  "user_backgrounds",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    path: text("path").notNull(),
+    mime: text("mime").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userIdx: index("user_backgrounds_user_idx").on(table.userId),
+  }),
+);
+
+// ---- Campaign-provided virtual backgrounds (offered to all members) ----
+export const campaignBackgrounds = sqliteTable(
+  "campaign_backgrounds",
+  {
+    id: text("id").primaryKey(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    path: text("path").notNull(),
+    mime: text("mime").notNull(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    campaignIdx: index("campaign_backgrounds_campaign_idx").on(table.campaignId),
+  }),
+);
+
 // ---- Per-user preferences (media capture, appearance, etc.) ----
 export const userPreferences = sqliteTable("user_preferences", {
   userId: text("user_id")
@@ -203,6 +246,9 @@ export const userPreferences = sqliteTable("user_preferences", {
   microphoneDeviceId: text("microphone_device_id").notNull().default("default"),
   cameraDeviceId: text("camera_device_id").notNull().default("default"),
   speakerDeviceId: text("speaker_device_id").notNull().default("default"),
+  cameras: text("cameras").notNull().default("[]"),
+  cameraBackground: text("camera_background").notNull().default('{"mode":"none"}'),
+  segmentationQuality: text("segmentation_quality", { enum: ["fast", "quality"] }).notNull().default("quality"),
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
