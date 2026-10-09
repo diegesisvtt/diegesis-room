@@ -21,6 +21,30 @@ const patchSchema = z
     microphoneDeviceId: z.string().max(256).optional(),
     cameraDeviceId: z.string().max(256).optional(),
     speakerDeviceId: z.string().max(256).optional(),
+    segmentationQuality: z.enum(["fast", "quality"]).optional(),
+    cameras: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          deviceId: z.string(),
+          quality: z.enum(["360", "540", "720", "1080", "1440", "2160"]).optional(),
+        }),
+      )
+      .optional(),
+    cameraBackground: z
+      .discriminatedUnion("mode", [
+        z.object({ mode: z.literal("none") }),
+        z.object({ mode: z.literal("blur") }),
+        z.object({ mode: z.literal("color"), color: z.string().max(32) }),
+        z.object({
+          mode: z.literal("image"),
+          imageId: z.string().max(128).optional(),
+          imageUrl: z.string().max(512).optional(),
+          campaign: z.boolean().optional(),
+        }),
+      ])
+      .optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "Nada para atualizar" });
 
@@ -66,6 +90,26 @@ export const preferencesRoutes = new Elysia({ prefix: "/preferences" })
         microphoneDeviceId: t.Optional(t.String()),
         cameraDeviceId: t.Optional(t.String()),
         speakerDeviceId: t.Optional(t.String()),
+        segmentationQuality: t.Optional(t.String()),
+        cameras: t.Optional(
+          t.Array(
+            t.Object({
+              id: t.String(),
+              name: t.String(),
+              deviceId: t.String(),
+              quality: t.Optional(t.String()),
+            }),
+          ),
+        ),
+        cameraBackground: t.Optional(
+          t.Object({
+            mode: t.String(),
+            color: t.Optional(t.String()),
+            imageId: t.Optional(t.String()),
+            imageUrl: t.Optional(t.String()),
+            campaign: t.Optional(t.Boolean()),
+          }),
+        ),
       }),
     },
   );
