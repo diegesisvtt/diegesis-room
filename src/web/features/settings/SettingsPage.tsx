@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { AudioLines, Check, CircleCheck, Clapperboard, Dices, Headphones, Loader2, Mic, MonitorUp, Palette, Radio, Save, Sparkles, TriangleAlert, Video, Volume2, X } from "lucide-react";
+import { AudioLines, Check, CircleCheck, Clapperboard, Dices, Headphones, Loader2, Mic, MonitorUp, Palette, Plus, Radio, Save, Sparkles, Trash2, TriangleAlert, Video, Volume2, X } from "lucide-react";
 import { api, type LiveKitSettings } from "@/web/lib/api";
 import {
   setPreferences,
   shareQualityPresets,
   usePreferences,
+  type AdditionalCamera,
   type CameraQuality,
   type ContentHint,
   type KrispModel,
   type KrispQuality,
   type NoiseCancellationMode,
+  type SegmentationQuality,
   type ShareQuality,
   type UserPreferences,
 } from "@/web/lib/preferences";
@@ -30,13 +32,14 @@ import {
   SelectValue,
 } from "@/web/components/ui/select";
 
-type SectionKey = "voice" | "appearance" | "livekit";
+type SectionKey = "voice" | "appearance" | "livekit" | "cameras";
 
 const sections: { category: string; items: { key: SectionKey; label: string; icon: typeof Mic }[] }[] = [
   {
     category: "Preferências do usuário",
     items: [
       { key: "voice", label: "Voz e vídeo", icon: Mic },
+      { key: "cameras", label: "Câmeras adicionais", icon: Video },
       { key: "appearance", label: "Aparência", icon: Palette },
     ],
   },
@@ -112,6 +115,7 @@ export function SettingsPage() {
               transition={{ duration: 0.18 }}
             >
               {section === "voice" && <VoiceSection />}
+              {section === "cameras" && <AdditionalCamerasSection />}
               {section === "appearance" && <AppearanceSection />}
               {section === "livekit" && <LiveKitSection />}
             </motion.div>
@@ -174,6 +178,11 @@ const cameraQualityLabels: Record<CameraQuality, string> = {
   "720": "720p (HD)",
   "540": "540p",
   "360": "360p",
+};
+
+const segmentationQualityLabels: Record<SegmentationQuality, string> = {
+  quality: "Qualidade (mais nítido)",
+  fast: "Rápido (mais leve)",
 };
 
 const noiseCancellationLabels: Record<NoiseCancellationMode, string> = {
@@ -313,6 +322,132 @@ function MediaDevicesSection() {
   );
 }
 
+function AdditionalCamerasSection() {
+  const prefs = usePreferences();
+  const { devices } = useMediaDevices();
+  const [newName, setNewName] = useState("");
+  const [newDevice, setNewDevice] = useState("default");
+
+  const videoDevices = devicesOfKind(devices, "videoinput");
+
+  function update(cameras: AdditionalCamera[]) {
+    setPreferences({ cameras });
+  }
+
+  function addCamera() {
+    const name = newName.trim();
+    if (!name) return;
+    const cam: AdditionalCamera = {
+      id: `cam-${crypto.randomUUID().slice(0, 8)}`,
+      name,
+      deviceId: newDevice,
+    };
+    update([...prefs.cameras, cam]);
+    setNewName("");
+  }
+
+  return (
+    <motion.div variants={containerVariants} initial="hidden" animate="show">
+      <SectionHeader
+        title="Câmeras adicionais"
+        description="Câmeras usadas como host na mesa (mapa, mestre, ângulos extras). Válidas em todas as suas campanhas."
+      />
+      <div className="space-y-3">
+        {prefs.cameras.map((cam) => (
+          <motion.div key={cam.id} variants={itemVariants} className="card-ornate space-y-2 rounded-xl p-4">
+            <div className="flex items-center gap-2">
+              <Input
+                value={cam.name}
+                aria-label="Nome da câmera"
+                onChange={(e) =>
+                  update(prefs.cameras.map((c) => (c.id === cam.id ? { ...c, name: e.target.value } : c)))
+                }
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-9 shrink-0 rounded-full hover:text-danger"
+                aria-label={`Remover ${cam.name}`}
+                onClick={() => update(prefs.cameras.filter((c) => c.id !== cam.id))}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={cam.deviceId}
+                onValueChange={(id) =>
+                  update(prefs.cameras.map((c) => (c.id === cam.id ? { ...c, deviceId: id } : c)))
+                }
+              >
+                <SelectTrigger aria-label={`Dispositivo de ${cam.name}`} className="flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Padrão do sistema</SelectItem>
+                  {videoDevices.map((device, i) => (
+                    <SelectItem key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Câmera ${i + 1}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={cam.quality ?? "720"}
+                onValueChange={(q) =>
+                  update(prefs.cameras.map((c) => (c.id === cam.id ? { ...c, quality: q as CameraQuality } : c)))
+                }
+              >
+                <SelectTrigger aria-label={`Qualidade de ${cam.name}`} className="w-36 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(cameraQualityLabels) as CameraQuality[]).map((q) => (
+                    <SelectItem key={q} value={q}>
+                      {cameraQualityLabels[q]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </motion.div>
+        ))}
+        {prefs.cameras.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma câmera adicional configurada. Adicione a câmera do mapa, do mestre ou ângulos extras.
+          </p>
+        )}
+        <motion.div variants={itemVariants} className="flex items-center gap-2">
+          <Input
+            placeholder="Nome (ex.: Mapa, Mestre)"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addCamera();
+            }}
+          />
+          <Select value={newDevice} onValueChange={setNewDevice}>
+            <SelectTrigger aria-label="Dispositivo da nova câmera" className="w-40 shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Padrão do sistema</SelectItem>
+              {videoDevices.map((device, i) => (
+                <SelectItem key={device.deviceId} value={device.deviceId}>
+                  {device.label || `Câmera ${i + 1}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="gold" size="icon" className="shrink-0 rounded-full" aria-label="Adicionar câmera" onClick={addCamera} disabled={!newName.trim()}>
+            <Plus className="size-4" />
+          </Button>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}
+
 function VoiceSection() {
   const prefs = usePreferences();
 
@@ -423,6 +558,27 @@ function VoiceSection() {
               {(Object.keys(cameraQualityLabels) as CameraQuality[]).map((q) => (
                 <SelectItem key={q} value={q}>
                   {cameraQualityLabels[q]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </PreferenceRow>
+        <PreferenceRow
+          icon={Video}
+          title="Qualidade do fundo virtual"
+          description="Qualidade usa um modelo mais preciso (bordas de cabelo melhores). Rápido é mais leve para máquinas simples."
+        >
+          <Select
+            value={prefs.segmentationQuality}
+            onValueChange={(v) => setPreferences({ segmentationQuality: v as SegmentationQuality })}
+          >
+            <SelectTrigger aria-label="Qualidade do fundo virtual" className="w-52">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(segmentationQualityLabels) as SegmentationQuality[]).map((q) => (
+                <SelectItem key={q} value={q}>
+                  {segmentationQualityLabels[q]}
                 </SelectItem>
               ))}
             </SelectContent>

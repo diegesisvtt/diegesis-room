@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Check, Loader2, Save, Trash2 } from "lucide-react";
-import { api } from "@/web/lib/api";
+import { Check, ImagePlus, Loader2, Save, Trash2 } from "lucide-react";
+import { api, type Background } from "@/web/lib/api";
 import { clearSession } from "@/web/lib/session";
+import { fileToDataUrl } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 import { Input } from "@/web/components/ui/input";
 import { Label } from "@/web/components/ui/label";
@@ -22,8 +23,9 @@ const itemVariants = {
 };
 
 export function CampaignSettingsPage() {
-  const { campaign, refresh } = useOutletContext<CampaignContext>();
+  const { campaign, refresh, session } = useOutletContext<CampaignContext>();
   const navigate = useNavigate();
+  const isHost = session.role === "host";
   const [name, setName] = useState(campaign.name);
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
@@ -96,6 +98,8 @@ export function CampaignSettingsPage() {
           </div>
         </motion.div>
 
+        {isHost && <CampaignBackgroundsSection campaignId={campaign.id} />}
+
         <motion.div variants={itemVariants} className="card-ornate rounded-xl border-danger/30 p-6">
           <p className="font-display text-sm font-semibold text-danger">Zona de perigo</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -117,5 +121,90 @@ export function CampaignSettingsPage() {
         onConfirm={deleteCampaign}
       />
     </div>
+  );
+}
+
+function CampaignBackgroundsSection({ campaignId }: { campaignId: string }) {
+  const [backgrounds, setBackgrounds] = useState<Background[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void api
+      .listCampaignBackgrounds(campaignId)
+      .then(setBackgrounds)
+      .catch(() => {});
+  }, [campaignId]);
+
+  async function handleUpload(file: File) {
+    setUploading(true);
+    setError("");
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const name = file.name.replace(/\.[^.]+$/, "").trim() || "Fundo";
+      const uploaded = await api.uploadCampaignBackground(campaignId, name, dataUrl);
+      setBackgrounds((prev) => [...prev, uploaded]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao enviar o fundo.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function remove(id: string) {
+    try {
+      await api.deleteCampaignBackground(campaignId, id);
+      setBackgrounds((prev) => prev.filter((b) => b.id !== id));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <motion.div variants={itemVariants} className="card-ornate rounded-xl p-6">
+      <p className="font-display text-sm font-semibold text-accent">Fundos da campanha</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Imagens oferecidas aos jogadores como fundo virtual na hora de ligar a câmera.
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {backgrounds.map((bg) => (
+          <div key={bg.id} className="group relative overflow-hidden rounded-lg border border-accent/15">
+            <img src={bg.url} alt={bg.name} className="aspect-video w-full object-cover" />
+            <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-[10px] text-white/90">
+              {bg.name}
+            </span>
+            <button
+              type="button"
+              onClick={() => void remove(bg.id)}
+              aria-label={`Remover ${bg.name}`}
+              className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white/80 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      {backgrounds.length === 0 && <p className="mt-2 text-xs text-muted-foreground">Nenhum fundo cadastrado.</p>}
+
+      <div className="mt-4 flex items-center gap-3">
+        <Button variant="outline-gold" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+          {uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />} Enviar fundo
+        </Button>
+        {error && <p className="text-xs text-danger">{error}</p>}
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleUpload(file);
+          e.target.value = "";
+        }}
+      />
+    </motion.div>
   );
 }
