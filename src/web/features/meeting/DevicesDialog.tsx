@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Room } from "livekit-client";
-import { Plus, Settings, Star, Trash2, Volume2 } from "lucide-react";
+import { AudioLines, CircleCheck, Plus, Settings, Star, Trash2, TriangleAlert, Volume2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { MicrophoneMeter } from "./MicrophoneMeter";
 import type { CameraQuality, HostCamera, ShareQuality } from "./useLiveKitRoom";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
@@ -18,10 +19,8 @@ import {
 
 type DeviceKind = "audioinput" | "videoinput" | "audiooutput";
 
-const audioFields: { kind: DeviceKind; label: string }[] = [
-  { kind: "audioinput", label: "Microfone" },
-  { kind: "audiooutput", label: "Saída de áudio" },
-];
+type NoticeTone = "success" | "error" | "testing";
+type SoundNotice = { tone: NoticeTone; message: string };
 
 const list = {
   show: { transition: { staggerChildren: 0.05 } },
@@ -64,14 +63,14 @@ export function DevicesDialog({
 }) {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selected, setSelected] = useState<Record<string, string>>({});
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<SoundNotice | null>(null);
   const [newName, setNewName] = useState("");
   const [newDevice, setNewDevice] = useState("default");
 
   useEffect(() => {
     if (!open) return;
     if (!navigator.mediaDevices?.enumerateDevices) {
-      setNotice("Dispositivos indisponíveis neste navegador.");
+      setNotice({ tone: "error", message: "Dispositivos indisponíveis neste navegador." });
       return;
     }
     void navigator.mediaDevices.enumerateDevices().then(setDevices);
@@ -85,16 +84,25 @@ export function DevicesDialog({
       try {
         await room.switchActiveDevice(kind, id);
       } catch {
-        setNotice("Não foi possível alternar o dispositivo.");
+        setNotice({ tone: "error", message: "Não foi possível alternar o dispositivo." });
       }
     }
     setSelected((current) => ({ ...current, [kind]: id }));
   }
 
   async function testSound() {
+    const deviceId = selected.audiooutput;
+    const deviceLabel =
+      deviceId && deviceId !== "default"
+        ? devices.find((d) => d.kind === "audiooutput" && d.deviceId === deviceId)?.label
+        : undefined;
+    setNotice({ tone: "testing", message: deviceLabel ? `Testando em ${deviceLabel}…` : "Testando som…" });
     try {
       const audio = new AudioContext();
       await audio.resume();
+      if (deviceId && deviceId !== "default" && "setSinkId" in audio) {
+        await (audio as AudioContext & { setSinkId(id: string): Promise<void> }).setSinkId(deviceId);
+      }
       const oscillator = audio.createOscillator();
       const gain = audio.createGain();
       gain.gain.value = 0.15;
@@ -103,8 +111,9 @@ export function DevicesDialog({
       oscillator.stop(audio.currentTime + 0.3);
       await new Promise((resolve) => setTimeout(resolve, 400));
       await audio.close();
+      setNotice({ tone: "success", message: deviceLabel ? `Som reproduzido em ${deviceLabel}.` : "Som reproduzido." });
     } catch {
-      setNotice("Não foi possível reproduzir o som de teste.");
+      setNotice({ tone: "error", message: "Não foi possível reproduzir o som de teste." });
     }
   }
 
@@ -255,21 +264,51 @@ export function DevicesDialog({
           </div>
         )}
 
-        {audioFields.map(({ kind, label }) => (
+        <div className="space-y-2">
           <DeviceSelect
-            key={kind}
-            kind={kind}
-            label={label}
+            kind="audioinput"
+            label="Microfone"
             devices={devices}
-            value={selected[kind] || "default"}
-            onSelect={(id) => void selectDevice(kind, id)}
+            value={selected.audioinput || "default"}
+            onSelect={(id) => void selectDevice("audioinput", id)}
           />
-        ))}
+          <MicrophoneMeter deviceId={selected.audioinput || "default"} />
+        </div>
+        <DeviceSelect
+          kind="audiooutput"
+          label="Saída de áudio"
+          devices={devices}
+          value={selected.audiooutput || "default"}
+          onSelect={(id) => void selectDevice("audiooutput", id)}
+        />
 
         <Button variant="outline-gold" className="self-start" onClick={() => void testSound()}>
           <Volume2 className="size-4" /> Testar som
         </Button>
-        {notice && <p className="text-xs text-warning">{notice}</p>}
+        {notice && (
+          <motion.div
+            key={notice.tone + notice.message}
+            initial={{ opacity: 0, y: 8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 340, damping: 28 }}
+            role="status"
+            className={cn(
+              "flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm backdrop-blur-sm",
+              notice.tone === "success" && "border-success/30 bg-success/10 shadow-[0_0_18px_color-mix(in_oklab,var(--color-success)_18%,transparent)]",
+              notice.tone === "error" && "border-destructive/30 bg-destructive/10 shadow-[0_0_18px_color-mix(in_oklab,var(--color-danger)_18%,transparent)]",
+              notice.tone === "testing" && "border-accent/30 bg-accent/10 shadow-[0_0_18px_color-mix(in_oklab,var(--color-accent)_18%,transparent)]",
+            )}
+          >
+            {notice.tone === "success" ? (
+              <CircleCheck className="size-4 shrink-0 text-success" />
+            ) : notice.tone === "error" ? (
+              <TriangleAlert className="size-4 shrink-0 text-danger" />
+            ) : (
+              <AudioLines className="size-4 shrink-0 animate-pulse text-accent" />
+            )}
+            <span className="min-w-0 flex-1 text-foreground">{notice.message}</span>
+          </motion.div>
+        )}
       </DialogContent>
     </Dialog>
   );
