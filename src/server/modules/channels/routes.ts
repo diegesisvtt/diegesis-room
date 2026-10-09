@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { listChannels, createChannel, updateChannel, deleteChannel } from "./service";
+import { listChannels, createChannel, updateChannel, deleteChannel, listChannelPresence } from "./service";
 import { db } from "../../db/client";
 import { channels } from "../../db/schema";
 import { hostGuard, memberGuard } from "../../lib/guards";
@@ -24,6 +24,14 @@ export const channelsRoutes = new Elysia({ prefix: "/campaigns/:campaignId/chann
       return { error: check.error };
     }
     return listChannels(params.campaignId);
+  })
+  .get("/presence", async ({ params, query, user, set }) => {
+    const check = await memberGuard(params.campaignId, user, query.profileToken);
+    if (!check.ok) {
+      set.status = check.status;
+      return { error: check.error };
+    }
+    return listChannelPresence(params.campaignId);
   })
   .post(
     "/",
