@@ -3,6 +3,7 @@ import { Hash, MonitorUp, Video } from "lucide-react";
 import type { CampaignContext } from "./types";
 import { ChannelChat } from "@/web/features/chat/ChannelChat";
 import { VoiceStage } from "@/web/features/meeting/VoiceStage";
+import { PresenceStack } from "@/web/components/PresenceStack";
 import { Button } from "@/web/components/ui/button";
 import { cn } from "@/web/lib/utils";
 
@@ -37,6 +38,12 @@ export function ChannelView() {
           <h1 className="text-glow truncate font-display text-sm font-semibold text-gold-bright sm:text-base">{channel.name}</h1>
           <p className="hidden text-xs text-muted-foreground sm:block">Chat persistente e mesa de voz</p>
         </div>
+        <PresenceStack
+          participants={context.presence[channel.id] ?? []}
+          size="size-7"
+          textClass="text-[10px]"
+          ringClass="ring-card"
+        />
         {!inVoice && (
           <Button variant="gold" size="sm" onClick={enterVoice}>
             <Video className="size-4" /> Entrar na sala de voz

@@ -9,7 +9,7 @@ import {
   setProfileToken,
   type Session,
 } from "@/web/lib/session";
-import { api, type Campaign, type Channel } from "@/web/lib/api";
+import { api, type Campaign, type Channel, type VoiceParticipant } from "@/web/lib/api";
 import { Button } from "@/web/components/ui/button";
 import { EmberParticles } from "@/web/components/EmberParticles";
 import { disconnect as disconnectVoice } from "@/web/features/meeting/voiceStore";
@@ -21,6 +21,7 @@ export function CampaignPage() {
   const navigate = useNavigate();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [presence, setPresence] = useState<Record<string, VoiceParticipant[]>>({});
   const [session, setSession] = useState<Session | null>(() => loadSession());
 
   function updateSession(patch: Partial<Session>) {
@@ -33,12 +34,14 @@ export function CampaignPage() {
   }
 
   async function refresh() {
-    const [camp, channelList] = await Promise.all([
+    const [camp, channelList, channelPresence] = await Promise.all([
       api.getCampaign(campaignId),
       api.listChannels(campaignId, peekProfileToken(campaignId)),
+      api.listChannelPresence(campaignId, peekProfileToken(campaignId)),
     ]);
     setCampaign(camp);
     setChannels(channelList);
+    setPresence(channelPresence);
   }
 
   useEffect(() => {
@@ -50,6 +53,22 @@ export function CampaignPage() {
     void refresh().catch(() => navigate("/"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
+
+  // Atualiza periodicamente a presença nos canais de voz (quem está em cada mesa).
+  useEffect(() => {
+    if (!session) return;
+    const poll = () => {
+      void api
+        .listChannelPresence(campaignId, peekProfileToken(campaignId))
+        .then(setPresence)
+        .catch(() => {
+          // Falha de rede: mantém o último estado e tenta de novo no próximo intervalo.
+        });
+    };
+    const interval = setInterval(poll, 8000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId, session === null]);
 
   // Sincroniza status do perfil (aprovação/banimento acontecem no servidor).
   useEffect(() => {
@@ -95,7 +114,7 @@ export function CampaignPage() {
     );
   }
 
-  const context: CampaignContext = { campaign, channels, session, refresh, updateSession };
+  const context: CampaignContext = { campaign, channels, presence, session, refresh, updateSession };
 
   return (
     <main className="flex h-dvh min-w-0 bg-background text-foreground">

@@ -17,7 +17,7 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { api, type Channel, type Invite } from "@/web/lib/api";
+import { api, type Channel, type Invite, type VoiceParticipant } from "@/web/lib/api";
 import { clearSession, getProfileToken, type Session } from "@/web/lib/session";
 import { useAuth } from "@/web/features/auth/useAuth";
 import { VoiceDock } from "@/web/features/meeting/VoiceDock";
@@ -50,6 +50,7 @@ import {
 } from "@/web/components/ui/context-menu";
 import { ConfirmDialog } from "@/web/components/ConfirmDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/web/components/ui/avatar";
+import { PresenceStack } from "@/web/components/PresenceStack";
 import { Separator } from "@/web/components/ui/separator";
 import { ScrollArea } from "@/web/components/ui/scroll-area";
 import type { CampaignContext } from "./types";
@@ -65,7 +66,7 @@ const dialogItem: Variants = {
 };
 
 export function Sidebar({ context }: { context: CampaignContext }) {
-  const { campaign, channels, session, refresh, updateSession } = context;
+  const { campaign, channels, presence, session, refresh, updateSession } = context;
   const navigate = useNavigate();
   const { user } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
@@ -121,6 +122,7 @@ export function Sidebar({ context }: { context: CampaignContext }) {
           <ChannelGroup
             title="CANAIS"
             channels={channels}
+            presence={presence}
             canModerate={session.role === "host"}
             onAdd={() => setCreateOpen(true)}
             onRename={(channel) => setRenameTarget(channel)}
@@ -312,6 +314,7 @@ function EditProfileDialog({
 function ChannelGroup({
   title,
   channels,
+  presence,
   canModerate,
   onAdd,
   onRename,
@@ -319,6 +322,7 @@ function ChannelGroup({
 }: {
   title: string;
   channels: Channel[];
+  presence: Record<string, VoiceParticipant[]>;
   canModerate: boolean;
   onAdd: () => void;
   onRename: (channel: Channel) => void;
@@ -362,6 +366,7 @@ function ChannelGroup({
                     )}
                   />
                   <span className="relative z-10 min-w-0 flex-1 truncate text-left">{channel.name}</span>
+                  <PresenceStack participants={presence[channel.id] ?? []} />
                 </>
               )}
             </NavLink>
