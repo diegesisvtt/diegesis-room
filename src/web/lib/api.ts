@@ -31,6 +31,12 @@ export type Channel = {
   createdAt: string;
 };
 
+export type VoiceParticipant = {
+  identity: string;
+  name: string;
+  photoUrl: string | null;
+};
+
 export type Invite = {
   id: string;
   campaignId: string;
@@ -51,9 +57,10 @@ export type Message = {
   id: string;
   channelId: string;
   authorName: string;
-  kind: "text" | "roll" | "system";
+  kind: "text" | "roll" | "system" | "image";
   body: string;
   rollJson: string | null;
+  imageUrl: string | null;
   createdAt: string;
 };
 
@@ -91,6 +98,12 @@ export type LiveKitSettings = {
   url: string;
   apiKey: string;
   hasSecret: boolean;
+};
+
+export type Background = {
+  id: string;
+  name: string;
+  url: string;
 };
 
 export type TokenResponse = { mode: "live"; token: string; url: string; identity: string };
@@ -153,6 +166,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
+  listChannelPresence: (campaignId: string, profileToken?: string) =>
+    request<Record<string, VoiceParticipant[]>>(
+      `/api/campaigns/${campaignId}/channels/presence${profileToken ? `?profileToken=${encodeURIComponent(profileToken)}` : ""}`,
+    ),
   updateChannel: (id: string, name: string) =>
     request<Channel>(`/api/channels/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
   deleteChannel: (id: string) =>
@@ -233,7 +250,14 @@ export const api = {
     ),
   sendMessage: (
     channelId: string,
-    input: { authorName: string; body: string; kind?: "text" | "roll" | "system"; rollJson?: string; profileToken?: string },
+    input: {
+      authorName: string;
+      body: string;
+      kind?: "text" | "roll" | "system" | "image";
+      rollJson?: string;
+      image?: string;
+      profileToken?: string;
+    },
   ) =>
     request<Message>(`/api/channels/${channelId}/messages`, {
       method: "POST",
@@ -249,6 +273,24 @@ export const api = {
   getPreferences: () => request<UserPreferences>("/api/preferences"),
   savePreferences: (patch: Partial<UserPreferences>) =>
     request<UserPreferences>("/api/preferences", { method: "PUT", body: JSON.stringify(patch) }),
+
+  // Backgrounds (virtual camera backgrounds)
+  listUserBackgrounds: () => request<Background[]>("/api/backgrounds"),
+  uploadUserBackground: (name: string, image: string) =>
+    request<Background>("/api/backgrounds", { method: "POST", body: JSON.stringify({ name, image }) }),
+  deleteUserBackground: (id: string) =>
+    request<{ ok: boolean }>(`/api/backgrounds/${id}`, { method: "DELETE" }),
+  listCampaignBackgrounds: (campaignId: string, profileToken?: string) =>
+    request<Background[]>(
+      `/api/campaigns/${campaignId}/backgrounds${profileToken ? `?profileToken=${encodeURIComponent(profileToken)}` : ""}`,
+    ),
+  uploadCampaignBackground: (campaignId: string, name: string, image: string) =>
+    request<Background>(`/api/campaigns/${campaignId}/backgrounds`, {
+      method: "POST",
+      body: JSON.stringify({ name, image }),
+    }),
+  deleteCampaignBackground: (campaignId: string, id: string) =>
+    request<{ ok: boolean }>(`/api/campaigns/${campaignId}/backgrounds/${id}`, { method: "DELETE" }),
 };
 
 export function wsUrl(channelId: string, since?: string, profileToken?: string, audience?: boolean): string {
