@@ -100,13 +100,19 @@ export type LiveKitSettings = {
   hasSecret: boolean;
 };
 
+export type StreamDisplayMode = "player" | "character" | "both";
+
+export type CampaignSettings = {
+  streamDisplayMode: StreamDisplayMode;
+};
+
 export type Background = {
   id: string;
   name: string;
   url: string;
 };
 
-export type TokenResponse = { mode: "live"; token: string; url: string; identity: string };
+export type TokenResponse = { mode: "live"; token: string; url: string; identity: string; streamDisplayMode?: StreamDisplayMode };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -155,6 +161,15 @@ export const api = {
     request<Campaign>(`/api/campaigns/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
   deleteCampaign: (id: string) =>
     request<{ ok: boolean }>(`/api/campaigns/${id}`, { method: "DELETE" }),
+
+  // Campaign settings
+  getCampaignSettings: (campaignId: string) =>
+    request<CampaignSettings>(`/api/campaigns/${campaignId}/settings`),
+  updateCampaignSettings: (campaignId: string, streamDisplayMode: StreamDisplayMode) =>
+    request<CampaignSettings>(`/api/campaigns/${campaignId}/settings`, {
+      method: "PATCH",
+      body: JSON.stringify({ streamDisplayMode }),
+    }),
 
   // Channels
   listChannels: (campaignId: string, profileToken?: string) =>
