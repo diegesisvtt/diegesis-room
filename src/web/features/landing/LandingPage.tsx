@@ -116,8 +116,9 @@ export function LandingPage() {
 
   async function enterCampaign(campaign: CampaignEntry) {
     // Perfil: pelo token local ou pelo cookie (perfil do dono criado no servidor).
-    let profile = await api.getProfile(campaign.id, peekProfileToken(campaign.id)).catch(() => null);
-    if (!profile) profile = await api.getProfile(campaign.id).catch(() => null);
+    const profile =
+      (await api.getProfile(campaign.id, peekProfileToken(campaign.id)).catch(() => null))?.profile ??
+      null;
     if (profile) setProfileToken(campaign.id, profile.token);
     saveSession({
       name: profile?.name ?? user?.name ?? "Jogador",

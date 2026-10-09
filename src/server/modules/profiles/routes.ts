@@ -3,13 +3,11 @@ import { getPhotoFile, getProfile, ProfileError, upsertProfile } from "./service
 import { authPlugin } from "../auth/plugin";
 
 export const profilesRoutes = new Elysia().use(authPlugin)
-  .get("/campaigns/:campaignId/profiles/me", async ({ params, query, user, set }) => {
+  .get("/campaigns/:campaignId/profiles/me", async ({ params, query, user }) => {
+    // "Sem perfil ainda" não é erro: devolve 200 com profile nulo para o
+    // cliente distinguir de "perfil excluído/rejeitado" sem poluir o console.
     const profile = await getProfile(params.campaignId, query.token, user);
-    if (!profile) {
-      set.status = 404;
-      return { error: "Profile not found" };
-    }
-    return profile;
+    return { profile };
   })
   .put(
     "/campaigns/:campaignId/profiles/me",

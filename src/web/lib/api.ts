@@ -171,7 +171,7 @@ export const api = {
 
   // Profiles
   getProfile: (campaignId: string, token?: string) =>
-    request<Profile>(
+    request<{ profile: Profile | null }>(
       `/api/campaigns/${campaignId}/profiles/me${token ? `?token=${encodeURIComponent(token)}` : ""}`,
     ),
   saveProfile: (

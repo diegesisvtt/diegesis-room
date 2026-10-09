@@ -53,7 +53,13 @@ export function JoinPage() {
     const interval = setInterval(() => {
       void api
         .getProfile(invite.campaign.id, peekProfileToken(invite.campaign.id))
-        .then((saved) => {
+        .then(({ profile: saved }) => {
+          // Perfil nulo: o host rejeitou (ou expulsou) — não existe mais.
+          if (!saved) {
+            setWaiting(false);
+            setRejected(true);
+            return;
+          }
           if (saved.status === "active") enter(saved);
           else if (saved.status === "banned") {
             setWaiting(false);
@@ -61,9 +67,7 @@ export function JoinPage() {
           }
         })
         .catch(() => {
-          // 404: o host rejeitou (ou expulsou) — o perfil não existe mais.
-          setWaiting(false);
-          setRejected(true);
+          // Falha de rede: mantém aguardando e tenta de novo no próximo tick.
         });
     }, 3000);
     return () => clearInterval(interval);
@@ -76,12 +80,12 @@ export function JoinPage() {
         const resolved = await api.resolveInvite(token);
         setInvite(resolved);
         // Se esse navegador já tem um perfil nesta campanha, pré-preenche.
-        // Tenta pelo token local; senão, pelo cookie de sessão (usuário logado
-        // com perfil criado no servidor, ex.: dono da campanha).
-        let saved = await api
-          .getProfile(resolved.campaign.id, peekProfileToken(resolved.campaign.id))
-          .catch(() => null);
-        if (!saved) saved = await api.getProfile(resolved.campaign.id).catch(() => null);
+        // Uma única chamada cobre token local e cookie de sessão (o servidor
+        // cai no cookie quando o token não bate).
+        const saved =
+          (await api
+            .getProfile(resolved.campaign.id, peekProfileToken(resolved.campaign.id))
+            .catch(() => null))?.profile ?? null;
         if (saved) {
           setProfileToken(resolved.campaign.id, saved.token);
           setProfile({
@@ -130,7 +134,7 @@ export function JoinPage() {
 
   if (loading) {
     return (
-      <Scene>
+      <Scene key="loading">
         <motion.div
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -146,7 +150,7 @@ export function JoinPage() {
 
   if (rejected) {
     return (
-      <Scene>
+      <Scene key="rejected">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -173,7 +177,7 @@ export function JoinPage() {
 
   if (banned) {
     return (
-      <Scene>
+      <Scene key="banned">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -198,7 +202,7 @@ export function JoinPage() {
 
   if (waiting && invite) {
     return (
-      <Scene>
+      <Scene key="waiting">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -222,7 +226,7 @@ export function JoinPage() {
 
   if (!invite) {
     return (
-      <Scene>
+      <Scene key="invalid">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -249,7 +253,7 @@ export function JoinPage() {
   }
 
   return (
-    <Scene>
+    <Scene key="form">
       <motion.div
         variants={containerVariants}
         initial="hidden"

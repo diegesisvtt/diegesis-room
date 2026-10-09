@@ -55,14 +55,18 @@ export function CampaignPage() {
     const check = () => {
       void api
         .getProfile(campaignId, peekProfileToken(campaignId))
-        .then((profile) => {
+        .then(({ profile }) => {
+          // Perfil nulo: expulso/rejeitado — encerra a sessão local.
+          if (!profile) {
+            clearSession();
+            navigate("/");
+            return;
+          }
           setProfileToken(campaignId, profile.token);
           updateSession({ status: profile.status, role: profile.role });
         })
         .catch(() => {
-          // 404: perfil expulso/rejeitado — encerra a sessão local.
-          clearSession();
-          navigate("/");
+          // Falha de rede: mantém e tenta de novo no próximo intervalo.
         });
     };
     check();
