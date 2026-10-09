@@ -5,6 +5,7 @@ import { muteParticipant, removeParticipant } from "../../lib/livekit";
 import { db } from "../../db/client";
 import { channels } from "../../db/schema";
 import { hostGuard, memberGuard } from "../../lib/guards";
+import { getStreamDisplayMode } from "../campaigns/service";
 import { authPlugin } from "../auth/plugin";
 
 const TokenBody = t.Object({
@@ -24,10 +25,12 @@ export const roomsRoutes = new Elysia({ prefix: "/rooms" }).use(authPlugin)
   .post(
     "/token",
     async ({ body, user, set }) => {
+      const campaignId = await campaignIdOfChannel(body.channelId);
       let photoUrl: string | null = null;
+      let name: string | null = null;
+      let characterName: string | null = null;
       // Audience (modo TV/streaming): subscribe-only, link público do canal.
       if (!body.audience) {
-        const campaignId = await campaignIdOfChannel(body.channelId);
         if (!campaignId) {
           set.status = 404;
           return { error: "Channel not found" };
@@ -41,9 +44,14 @@ export const roomsRoutes = new Elysia({ prefix: "/rooms" }).use(authPlugin)
         if (membership?.photoPath) {
           photoUrl = `/api/profiles/${membership.id}/photo?v=${membership.updatedAt.getTime()}`;
         }
+        name = membership?.name ?? null;
+        characterName = membership?.characterName ?? null;
       }
       try {
-        return await requestToken({ ...body, photoUrl });
+        const result = await requestToken({ ...body, photoUrl, name, characterName });
+        // Modo de exibição de nomes no streaming (configurado por campanha).
+        const streamDisplayMode = campaignId ? await getStreamDisplayMode(campaignId) : "both";
+        return { ...result, streamDisplayMode };
       } catch (err) {
         set.status = 400;
         return { error: err instanceof Error ? err.message : "Unable to issue token" };
