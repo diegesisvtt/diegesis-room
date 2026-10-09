@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -130,24 +130,6 @@ export async function upsertProfile(
   // Perfil novo só nasce via convite válido — evita spam na fila de aprovação.
   if (!existing && !validInvite) {
     throw new ProfileError("Convite inválido para esta campanha", 403);
-  }
-
-  // Nome de exibição único por campanha (evita impersonação na moderação LiveKit).
-  const duplicate = await db
-    .select({ id: profiles.id })
-    .from(profiles)
-    .where(
-      and(
-        eq(profiles.campaignId, campaignId),
-        eq(profiles.name, name),
-        characterName
-          ? eq(profiles.characterName, characterName)
-          : isNull(profiles.characterName),
-      ),
-    )
-    .get();
-  if (duplicate && duplicate.id !== existing?.id) {
-    throw new ProfileError("Já existe um participante com esse nome nesta campanha", 409);
   }
 
   const id = existing?.id ?? uuidv7();
