@@ -7,7 +7,7 @@ import { MeetingStage } from "./MeetingStage";
 import { Controls } from "./Controls";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { DevicesDialog } from "./DevicesDialog";
-import { Loader2, UserX } from "lucide-react";
+import { Loader2, UserX, VolumeX } from "lucide-react";
 import { Button } from "@/web/components/ui/button";
 
 export function VoiceStage({
@@ -113,6 +113,17 @@ export function VoiceStage({
         spotlight={meeting.spotlight}
         onSpotlightChange={isHost ? meeting.setSpotlight : undefined}
       />
+      {meeting.audioBlocked && (
+        <div className="mx-3 mb-1 flex items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs text-foreground">
+            <VolumeX className="size-4 shrink-0 text-warning" />
+            <span>Áudio bloqueado pelo navegador. Clique para liberar a reprodução.</span>
+          </div>
+          <Button size="sm" variant="gold" onClick={meeting.enableAudio}>
+            Ativar áudio
+          </Button>
+        </div>
+      )}
       <Controls
         status={meeting.status}
         statusText={statusText}

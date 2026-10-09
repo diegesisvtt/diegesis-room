@@ -104,6 +104,7 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const preferences = usePreferences();
   const shareQuality = preferences.shareQuality;
   const shareQualityRef = useRef(shareQuality);
@@ -296,10 +297,12 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
         if (topic !== TOPIC || !participant || payload.length > 4096) return;
         handleDataMessage(payload, participant);
       });
+      room.on(RoomEvent.AudioPlaybackStatusChanged, (playing) => setAudioBlocked(!playing));
 
       await room.connect(credentials.url, credentials.token);
       roomRef.current = room;
       localIdentityRef.current = room.localParticipant.identity;
+      setAudioBlocked(!room.canPlaybackAudio);
       await room.localParticipant.setMicrophoneEnabled(micOn, micOptions());
       if (role === "host") {
         broadcastCameras(hostCamerasRef.current, spotlightRef.current);
@@ -435,6 +438,12 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
     setMicOn(next);
   }, [micOn]);
 
+  // Desbloqueia a reprodução de áudio remoto quando o navegador a bloqueia por
+  // política de autoplay. Precisa ser chamado num gesto de usuário (clique).
+  const enableAudio = useCallback(() => {
+    void roomRef.current?.startAudio();
+  }, []);
+
   const toggleCamera = useCallback(async () => {
     const next = !cameraOn;
     const room = roomRef.current;
@@ -502,6 +511,8 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
     spotlight,
     cameraErrors,
     localIdentity: localIdentityRef.current,
+    audioBlocked,
+    enableAudio,
     connect,
     disconnect,
     toggleMic,

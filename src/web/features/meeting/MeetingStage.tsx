@@ -61,11 +61,12 @@ export function MeetingStage({
           camera: true,
           local: true,
           isHost: true,
+          speakerIdentity: localIdentity,
         }))
-      : [{ identity: "local", name: localName, track: Object.values(localCameraTracks)[0] ?? null, local: true, photoUrl: localPhotoUrl }];
+      : [{ identity: "local", name: localName, track: Object.values(localCameraTracks)[0] ?? null, local: true, photoUrl: localPhotoUrl, speakerIdentity: localIdentity }];
     const guestTiles: Tile[] = guests.flatMap((g): Tile[] =>
       g.isHost && g.cameras.length > 0
-        ? g.cameras.map((c) => ({ identity: `cam:${c.id}`, name: c.name, track: c.track, camera: true, isHost: true }))
+        ? g.cameras.map((c) => ({ identity: `cam:${c.id}`, name: c.name, track: c.track, camera: true, isHost: true, speakerIdentity: g.identity }))
         : [{ identity: g.identity, name: g.name, track: g.cameraTrack, isHost: g.isHost, photoUrl: g.photoUrl, color: pickColor(g.identity) }],
     );
     const screenTiles: Tile[] = guests
@@ -102,9 +103,9 @@ export function MeetingStage({
   }
 
   function speakingFor(tile: Tile): boolean {
-    if (tile.local || tile.camera || tile.screen) return false;
+    if (tile.screen) return false;
     if (!live) return false;
-    return speakers.includes(tile.identity);
+    return speakers.includes(tile.speakerIdentity ?? tile.identity);
   }
 
   return (

@@ -17,6 +17,8 @@ export type Tile = {
   screen?: boolean;
   isHost?: boolean;
   color?: string;
+  /** Identidade real do participante cujo estado de fala este tile reflete. */
+  speakerIdentity?: string;
 };
 
 const entrance = { type: "spring", stiffness: 260, damping: 25 } as const;
