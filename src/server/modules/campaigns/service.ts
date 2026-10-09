@@ -2,7 +2,47 @@ import { and, eq, or } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { randomBytes } from "node:crypto";
 import { db } from "../../db/client";
-import { campaigns, profiles } from "../../db/schema";
+import { campaigns, campaignSettings, profiles } from "../../db/schema";
+
+// ---- Settings por campanha (chave/valor) ----
+
+export const STREAM_DISPLAY_MODE_KEY = "stream_display_mode";
+
+export type StreamDisplayMode = "player" | "character" | "both";
+
+export const STREAM_DISPLAY_MODES: StreamDisplayMode[] = ["player", "character", "both"];
+
+export function isStreamDisplayMode(value: unknown): value is StreamDisplayMode {
+  return typeof value === "string" && (STREAM_DISPLAY_MODES as string[]).includes(value);
+}
+
+export async function getCampaignSetting(campaignId: string, key: string): Promise<string | null> {
+  const row = await db
+    .select()
+    .from(campaignSettings)
+    .where(and(eq(campaignSettings.campaignId, campaignId), eq(campaignSettings.key, key)))
+    .get();
+  return row?.value ?? null;
+}
+
+export async function setCampaignSetting(campaignId: string, key: string, value: string): Promise<void> {
+  await db
+    .insert(campaignSettings)
+    .values({ campaignId, key, value })
+    .onConflictDoUpdate({
+      target: [campaignSettings.campaignId, campaignSettings.key],
+      set: { value },
+    });
+}
+
+export async function getStreamDisplayMode(campaignId: string): Promise<StreamDisplayMode> {
+  const value = await getCampaignSetting(campaignId, STREAM_DISPLAY_MODE_KEY);
+  return isStreamDisplayMode(value) ? value : "both";
+}
+
+export async function setStreamDisplayMode(campaignId: string, mode: StreamDisplayMode): Promise<void> {
+  await setCampaignSetting(campaignId, STREAM_DISPLAY_MODE_KEY, mode);
+}
 
 export type CampaignEntry = {
   id: string;

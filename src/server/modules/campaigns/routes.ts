@@ -6,6 +6,9 @@ import {
   createCampaign,
   updateCampaign,
   deleteCampaign,
+  getStreamDisplayMode,
+  setStreamDisplayMode,
+  isStreamDisplayMode,
 } from "./service";
 import { hostGuard, userGuard } from "../../lib/guards";
 import { authPlugin } from "../auth/plugin";
@@ -71,4 +74,29 @@ export const campaignsRoutes = new Elysia({ prefix: "/campaigns" }).use(authPlug
     }
     await deleteCampaign(params.campaignId);
     return { ok: true };
-  });
+  })
+  .get("/:campaignId/settings", async ({ params, user, set }) => {
+    const check = await hostGuard(params.campaignId, user);
+    if (!check.ok) {
+      set.status = check.status;
+      return { error: check.error };
+    }
+    return { streamDisplayMode: await getStreamDisplayMode(params.campaignId) };
+  })
+  .patch(
+    "/:campaignId/settings",
+    async ({ params, body, user, set }) => {
+      const check = await hostGuard(params.campaignId, user);
+      if (!check.ok) {
+        set.status = check.status;
+        return { error: check.error };
+      }
+      if (!isStreamDisplayMode(body.streamDisplayMode)) {
+        set.status = 400;
+        return { error: "streamDisplayMode inválido" };
+      }
+      await setStreamDisplayMode(params.campaignId, body.streamDisplayMode);
+      return { streamDisplayMode: body.streamDisplayMode };
+    },
+    { body: t.Object({ streamDisplayMode: t.String() }) },
+  );
