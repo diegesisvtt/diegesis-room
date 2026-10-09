@@ -2,13 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Check, ImagePlus, Loader2, Save, Trash2 } from "lucide-react";
-import { api, type Background } from "@/web/lib/api";
+import { api, type Background, type StreamDisplayMode } from "@/web/lib/api";
 import { clearSession } from "@/web/lib/session";
 import { fileToDataUrl } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 import { Input } from "@/web/components/ui/input";
 import { Label } from "@/web/components/ui/label";
 import { Separator } from "@/web/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/web/components/ui/select";
 import { ConfirmDialog } from "@/web/components/ConfirmDialog";
 import type { CampaignContext } from "./types";
 
@@ -99,6 +106,8 @@ export function CampaignSettingsPage() {
         </motion.div>
 
         {isHost && <CampaignBackgroundsSection campaignId={campaign.id} />}
+
+        {isHost && <StreamingSection campaignId={campaign.id} />}
 
         <motion.div variants={itemVariants} className="card-ornate rounded-xl border-danger/30 p-6">
           <p className="font-display text-sm font-semibold text-danger">Zona de perigo</p>
@@ -205,6 +214,63 @@ function CampaignBackgroundsSection({ campaignId }: { campaignId: string }) {
           e.target.value = "";
         }}
       />
+    </motion.div>
+  );
+}
+
+const STREAM_MODE_OPTIONS: { value: StreamDisplayMode; label: string }[] = [
+  { value: "player", label: "Nome do jogador" },
+  { value: "character", label: "Nome do personagem" },
+  { value: "both", label: "Jogador · Personagem" },
+];
+
+function StreamingSection({ campaignId }: { campaignId: string }) {
+  const [mode, setMode] = useState<StreamDisplayMode>("both");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void api
+      .getCampaignSettings(campaignId)
+      .then((s) => setMode(s.streamDisplayMode))
+      .catch(() => {});
+  }, [campaignId]);
+
+  async function save(next: StreamDisplayMode) {
+    setMode(next);
+    setSaving(true);
+    setError("");
+    try {
+      await api.updateCampaignSettings(campaignId, next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <motion.div variants={itemVariants} className="card-ornate rounded-xl p-6">
+      <p className="font-display text-sm font-semibold text-accent">Modo streaming</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Como o nome dos participantes aparece na tela de transmissão.
+      </p>
+      <div className="mt-4 space-y-1.5">
+        <Label>Nome exibido</Label>
+        <Select value={mode} onValueChange={(v) => void save(v as StreamDisplayMode)} disabled={saving}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STREAM_MODE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </motion.div>
   );
 }

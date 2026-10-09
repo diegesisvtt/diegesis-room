@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteVideoTrack } from "livekit-client";
 import { Loader2, RefreshCw, Sparkles, Volume2 } from "lucide-react";
-import { api, wsUrl, type Message } from "@/web/lib/api";
+import { api, wsUrl, type Message, type StreamDisplayMode } from "@/web/lib/api";
 import { animateRoll, parseRollPayload } from "@/web/features/dice/diceBox";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
@@ -17,18 +17,48 @@ type StreamGuest = {
   track: RemoteVideoTrack | null;
   photoUrl: string | null;
   speaking: boolean;
+  /** Nome do jogador (sem personagem), vindo do metadata do participante. */
+  playerName: string | null;
+  /** Nome do personagem, vindo do metadata do participante. */
+  characterName: string | null;
+  /** true quando o nome vem do roster de câmeras do host (ex.: "Mapa"). */
+  rosterCamera: boolean;
+  /** true quando é o compartilhamento de tela (rótulo ganha o sufixo "· Tela"). */
+  screenShare: boolean;
 };
 
-type ParticipantMeta = { photo: string | null; audience: boolean };
+type ParticipantMeta = { photo: string | null; audience: boolean; name: string | null; characterName: string | null };
 
 function parseMetadata(metadata: string | undefined): ParticipantMeta {
-  if (!metadata) return { photo: null, audience: false };
+  if (!metadata) return { photo: null, audience: false, name: null, characterName: null };
   try {
-    const data = JSON.parse(metadata) as { photo?: unknown; audience?: unknown };
-    return { photo: typeof data.photo === "string" ? data.photo : null, audience: data.audience === true };
+    const data = JSON.parse(metadata) as {
+      photo?: unknown;
+      audience?: unknown;
+      name?: unknown;
+      characterName?: unknown;
+    };
+    return {
+      photo: typeof data.photo === "string" ? data.photo : null,
+      audience: data.audience === true,
+      name: typeof data.name === "string" ? data.name : null,
+      characterName: typeof data.characterName === "string" ? data.characterName : null,
+    };
   } catch {
-    return { photo: null, audience: false };
+    return { photo: null, audience: false, name: null, characterName: null };
   }
+}
+
+/** Resolve o rótulo exibido de um tile conforme o modo de exibição da campanha. */
+function streamLabel(guest: StreamGuest, mode: StreamDisplayMode): string {
+  const suffix = guest.screenShare ? " · Tela" : "";
+  // Câmeras adicionais do host mantêm o próprio nome (ex.: "Mapa").
+  if (guest.rosterCamera) return guest.name;
+  const player = guest.playerName?.trim() || guest.name;
+  const character = guest.characterName?.trim() || null;
+  if (mode === "character") return `${character || player}${suffix}`;
+  if (mode === "player") return `${player}${suffix}`;
+  return `${character ? `${player} · ${character}` : player}${suffix}`;
 }
 
 const gridVariants = {
@@ -47,6 +77,7 @@ export function StreamPage() {
   const [status, setStatus] = useState<StreamStatus>("connecting");
   const [guests, setGuests] = useState<StreamGuest[]>([]);
   const [spotlight, setSpotlight] = useState<string | null>(null);
+  const [streamDisplayMode, setStreamDisplayMode] = useState<StreamDisplayMode>("both");
   const connectingRef = useRef(false);
   const hostIdentityRef = useRef<string | null>(null);
   const rosterRef = useRef<{ id: string; name: string }[]>([]);
@@ -64,12 +95,17 @@ export function StreamPage() {
       );
       if (participant.identity === hostIdentityRef.current && cameraPubs.length > 0) {
         for (const pub of cameraPubs) {
+          const rosterName = roster.find((c) => c.id === pub.trackName)?.name;
           list.push({
             identity: `cam:${pub.trackName}`,
-            name: roster.find((c) => c.id === pub.trackName)?.name || participant.name || participant.identity,
+            name: rosterName || participant.name || participant.identity,
             track: (pub.track as RemoteVideoTrack | undefined) ?? null,
             photoUrl,
             speaking: participant.isSpeaking,
+            playerName: meta.name,
+            characterName: meta.characterName,
+            rosterCamera: Boolean(rosterName),
+            screenShare: false,
           });
         }
       } else {
@@ -80,16 +116,24 @@ export function StreamPage() {
           track: (cameraPub?.track as RemoteVideoTrack | undefined) ?? null,
           photoUrl,
           speaking: participant.isSpeaking,
+          playerName: meta.name,
+          characterName: meta.characterName,
+          rosterCamera: false,
+          screenShare: false,
         });
       }
       const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);
       if (screenPub?.track) {
         list.push({
           identity: `screen:${participant.identity}`,
-          name: `${participant.name || participant.identity} · Tela`,
+          name: participant.name || participant.identity,
           track: screenPub.track as RemoteVideoTrack,
           photoUrl: null,
           speaking: false,
+          playerName: meta.name,
+          characterName: meta.characterName,
+          rosterCamera: false,
+          screenShare: true,
         });
       }
     }
@@ -108,6 +152,9 @@ export function StreamPage() {
         participantName: "Tela da mesa",
         audience: true,
       });
+      if (credentials.streamDisplayMode) {
+        setStreamDisplayMode(credentials.streamDisplayMode);
+      }
       const room = new Room({ dynacast: true });
       const sync = () => syncParticipants(room);
       room.on(RoomEvent.ParticipantConnected, sync);
@@ -203,13 +250,13 @@ export function StreamPage() {
           aria-label="Transmissão da mesa"
         >
           <motion.div variants={tileVariants} className="min-w-0 flex-1">
-            <StreamVideoTile guest={featured} />
+            <StreamVideoTile guest={featured} label={streamLabel(featured, streamDisplayMode)} />
           </motion.div>
           {others.length > 0 && (
             <aside className="flex w-40 shrink-0 flex-col gap-2 overflow-y-auto lg:w-56">
               {others.map((guest) => (
                 <motion.div key={guest.identity} variants={tileVariants} className="aspect-video shrink-0">
-                  <StreamVideoTile guest={guest} />
+                  <StreamVideoTile guest={guest} label={streamLabel(guest, streamDisplayMode)} />
                 </motion.div>
               ))}
             </aside>
@@ -225,7 +272,7 @@ export function StreamPage() {
         >
           {guests.map((guest) => (
             <motion.div key={guest.identity} variants={tileVariants} className="min-h-0">
-              <StreamVideoTile guest={guest} />
+              <StreamVideoTile guest={guest} label={streamLabel(guest, streamDisplayMode)} />
             </motion.div>
           ))}
         </motion.section>
@@ -241,7 +288,7 @@ function gridClass(count: number) {
   return "grid-cols-3";
 }
 
-function StreamVideoTile({ guest }: { guest: StreamGuest }) {
+function StreamVideoTile({ guest, label }: { guest: StreamGuest; label: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const element = videoRef.current;
@@ -268,14 +315,14 @@ function StreamVideoTile({ guest }: { guest: StreamGuest }) {
         />
       ) : guest.photoUrl ? (
         <div className="flex h-full items-center justify-center bg-secondary">
-          <img src={guest.photoUrl} alt={guest.name} className="size-24 rounded-full object-cover shadow-[var(--shadow-glow-gold)] lg:size-32" />
+          <img src={guest.photoUrl} alt={label} className="size-24 rounded-full object-cover shadow-[var(--shadow-glow-gold)] lg:size-32" />
         </div>
       ) : (
         <div className="font-display flex h-full items-center justify-center bg-secondary text-5xl font-bold text-accent/70">
-          {guest.name.slice(0, 2).toUpperCase()}
+          {label.slice(0, 2).toUpperCase()}
         </div>
       )}
-      <StreamLabel name={guest.name} speaking={guest.speaking} />
+      <StreamLabel name={label} speaking={guest.speaking} />
     </article>
   );
 }
