@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createLocalVideoTrack, Room, RoomEvent, Track, VideoPresets } from "livekit-client";
-import type { LocalVideoTrack, RemoteVideoTrack } from "livekit-client";
+import type { LocalVideoTrack, RemoteAudioTrack, RemoteVideoTrack } from "livekit-client";
 import { api, type TokenResponse } from "@/web/lib/api";
 import { loadSession, peekProfileToken } from "@/web/lib/session";
 import { setPreferences, shareQualityPresets, usePreferences, type ShareQuality } from "@/web/lib/preferences";
@@ -17,6 +17,7 @@ export type RemoteGuest = {
   cameras: RemoteCamera[];
   cameraTrack: RemoteVideoTrack | null;
   screenTrack: RemoteVideoTrack | null;
+  audioTrack: RemoteAudioTrack | null;
 };
 
 type ParticipantMeta = { photo: string | null; audience: boolean };
@@ -153,6 +154,7 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
           track: (pub.track as RemoteVideoTrack | undefined) ?? null,
         }));
         const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);
+        const micPub = participant.getTrackPublication(Track.Source.Microphone);
         return {
           identity: participant.identity,
           name: participant.name || participant.identity,
@@ -161,6 +163,7 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
           cameras,
           cameraTrack: cameras[0]?.track ?? null,
           screenTrack: (screenPub?.track as RemoteVideoTrack | undefined) ?? null,
+          audioTrack: (micPub?.track as RemoteAudioTrack | undefined) ?? null,
         };
       });
     setGuests(list);

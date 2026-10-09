@@ -5,6 +5,7 @@ import { displayName, type Session } from "@/web/lib/session";
 import { useLiveKitRoom } from "./useLiveKitRoom";
 import { MeetingStage } from "./MeetingStage";
 import { Controls } from "./Controls";
+import { AudioRenderer } from "./AudioRenderer";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { DevicesDialog } from "./DevicesDialog";
 import { Loader2, UserX, VolumeX } from "lucide-react";
@@ -113,6 +114,9 @@ export function VoiceStage({
         spotlight={meeting.spotlight}
         onSpotlightChange={isHost ? meeting.setSpotlight : undefined}
       />
+      {meeting.guests.map((guest) => (
+        <AudioRenderer key={guest.identity} track={guest.audioTrack} />
+      ))}
       {meeting.audioBlocked && (
         <div className="mx-3 mb-1 flex items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2">
           <div className="flex items-center gap-2 text-xs text-foreground">
