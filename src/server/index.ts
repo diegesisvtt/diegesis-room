@@ -14,6 +14,7 @@ import { roomsRoutes } from "./modules/rooms/routes";
 import { chatRoutes, chatWs } from "./modules/chat/routes";
 import { settingsRoutes } from "./modules/settings/routes";
 import { preferencesRoutes } from "./modules/preferences/routes";
+import { backgroundsRoutes } from "./modules/backgrounds/routes";
 
 runMigrations();
 
@@ -34,7 +35,8 @@ const app = new Elysia()
       .use(roomsRoutes)
       .use(chatRoutes)
       .use(settingsRoutes)
-      .use(preferencesRoutes),
+      .use(preferencesRoutes)
+      .use(backgroundsRoutes),
   );
 // In production, serve the built web assets (relative to the project root).
 const dist = resolve(process.cwd(), "dist");
