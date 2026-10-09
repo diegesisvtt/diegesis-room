@@ -6,7 +6,7 @@ import { useLiveKitRoom } from "./useLiveKitRoom";
 import { MeetingStage } from "./MeetingStage";
 import { Controls } from "./Controls";
 import { ParticipantsPanel } from "./ParticipantsPanel";
-import { DevicesDialog } from "./DevicesDialog";
+import { VideoSettingsDialog } from "./VideoSettingsDialog";
 import { Loader2, UserX, VolumeX } from "lucide-react";
 import { Button } from "@/web/components/ui/button";
 
@@ -24,7 +24,7 @@ export function VoiceStage({
   const isHost = session.role === "host";
   const myName = displayName(session);
   const [participantsOpen, setParticipantsOpen] = useState(false);
-  const [devicesOpen, setDevicesOpen] = useState(false);
+  const [videoSettingsOpen, setVideoSettingsOpen] = useState(false);
 
   const meeting = useLiveKitRoom({
     campaignId: session.campaignId,
@@ -99,6 +99,7 @@ export function VoiceStage({
         guests={meeting.guests}
         hostCameras={meeting.hostCameras}
         localCameraTracks={meeting.localCameraTracks}
+        personalCameraTrack={meeting.personalCameraTrack}
         localScreenTrack={meeting.localScreenTrack}
         sharing={meeting.sharing}
         signals={meeting.signals}
@@ -109,6 +110,12 @@ export function VoiceStage({
         isHost={isHost}
         spotlight={meeting.spotlight}
         onSpotlightChange={isHost ? meeting.setSpotlight : undefined}
+        onToggleHostCamera={(id) => void meeting.toggleHostCamera(id)}
+        onTogglePersonalCamera={() => void meeting.toggleCamera()}
+        onSetVolume={(identity, v) => meeting.setParticipantVolume(identity, v)}
+        volumes={meeting.volumes}
+        onMute={(identity, muted) => void api.muteParticipant(channelId, identity, muted)}
+        onRemove={(identity) => void api.removeParticipant(channelId, identity)}
       />
       {meeting.audioBlocked && (
         <div className="mx-3 mb-1 flex items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2">
@@ -129,13 +136,12 @@ export function VoiceStage({
         sharing={meeting.sharing}
         handRaised={Boolean(meeting.signals[meeting.localIdentity]?.hand)}
         onMic={() => void meeting.toggleMic()}
-        onCamera={isHost ? undefined : () => void meeting.toggleCamera()}
+        onCamera={() => (meeting.cameraOn ? void meeting.toggleCamera() : setVideoSettingsOpen(true))}
         onShare={() => void meeting.toggleShare()}
         onHand={() => void meeting.sendSignal({ hand: !meeting.signals[meeting.localIdentity]?.hand })}
         onReaction={(reaction) => void meeting.sendSignal({ reaction })}
         onLeave={leave}
         onOpenParticipants={() => setParticipantsOpen(true)}
-        onOpenDevices={() => setDevicesOpen(true)}
       />
       <ParticipantsPanel
         open={participantsOpen}
@@ -148,21 +154,11 @@ export function VoiceStage({
         onMute={(identity, muted) => void api.muteParticipant(channelId, identity, muted)}
         onRemove={(identity) => void api.removeParticipant(channelId, identity)}
       />
-      <DevicesDialog
-        open={devicesOpen}
-        onOpenChange={setDevicesOpen}
-        roomRef={meeting.roomRef}
-        isHost={isHost}
-        cameras={meeting.hostCameras}
-        cameraErrors={meeting.cameraErrors}
-        spotlight={meeting.spotlight}
-        shareQuality={meeting.shareQuality}
-        onShareQualityChange={meeting.setShareQuality}
-        onAddCamera={(name, deviceId) => void meeting.addCamera(name, deviceId)}
-        onRemoveCamera={meeting.removeCamera}
-        onToggleCamera={(id) => void meeting.toggleHostCamera(id)}
-        onUpdateCamera={(id, patch) => void meeting.updateCamera(id, patch)}
-        onSetSpotlight={meeting.setSpotlight}
+      <VideoSettingsDialog
+        open={videoSettingsOpen}
+        onOpenChange={setVideoSettingsOpen}
+        campaignId={session.campaignId}
+        onApply={(opts) => meeting.enableCameraWithSettings(opts)}
       />
     </div>
   );

@@ -1,7 +1,6 @@
 import {
   Camera,
   CameraOff,
-  ChevronDown,
   Hand,
   LogOut,
   Mic,
@@ -42,7 +41,6 @@ export function Controls({
   onLeave,
   onConnect,
   onOpenParticipants,
-  onOpenDevices,
 }: {
   status: RoomStatus;
   statusText: string;
@@ -51,14 +49,13 @@ export function Controls({
   sharing: boolean;
   handRaised: boolean;
   onMic: () => void;
-  onCamera?: () => void;
+  onCamera: () => void;
   onShare: () => void;
   onHand: () => void;
   onReaction: (emoji: string) => void;
   onLeave: () => void;
   onConnect?: () => void;
   onOpenParticipants: () => void;
-  onOpenDevices: () => void;
 }) {
   const live = status === "live";
   const connecting = status === "connecting";
@@ -83,14 +80,9 @@ export function Controls({
         >
           {micOn ? <Mic /> : <MicOff />}
         </IconControl>
-        <IconControl label="Opções de áudio e vídeo" onClick={onOpenDevices}>
-          <ChevronDown />
+        <IconControl label={cameraOn ? "Desligar câmeras" : "Ligar câmeras"} active={cameraOn} onClick={onCamera}>
+          {cameraOn ? <Camera /> : <CameraOff />}
         </IconControl>
-        {onCamera && (
-          <IconControl label={cameraOn ? "Desligar câmera" : "Ligar câmera"} active={cameraOn} onClick={onCamera}>
-            {cameraOn ? <Camera /> : <CameraOff />}
-          </IconControl>
-        )}
         <IconControl label={sharing ? "Parar compartilhamento" : "Compartilhar tela"} active={sharing} onClick={onShare}>
           <MonitorUp />
         </IconControl>

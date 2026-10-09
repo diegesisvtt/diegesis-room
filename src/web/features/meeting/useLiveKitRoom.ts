@@ -3,20 +3,20 @@ import { Track } from "livekit-client";
 import type { LocalAudioTrack } from "livekit-client";
 import { usePreferences } from "@/web/lib/preferences";
 import {
-  addCamera,
   connect as connectRoom,
   disconnect as disconnectRoom,
   enableAudio,
-  removeCamera,
+  enableCameraWithSettings,
   roomRef,
   sendSignal,
+  setParticipantVolume,
   setShareQuality,
   setSpotlight,
+  toggleAllHostCameras,
   toggleCamera,
   toggleHostCamera,
   toggleMic,
   toggleShare,
-  updateCamera,
   useVoiceRoom,
   type UseLiveKitRoomOptions,
 } from "./voiceStore";
@@ -99,14 +99,14 @@ export function useLiveKitRoom({ campaignId, channelId, channelName, participant
     disconnect: disconnectRoom,
     toggleMic,
     toggleCamera,
+    toggleAllHostCameras,
+    toggleHostCamera,
     toggleShare,
     setShareQuality,
+    setParticipantVolume,
     sendSignal,
-    addCamera,
-    removeCamera,
-    toggleHostCamera,
-    updateCamera,
     setSpotlight,
     enableAudio,
+    enableCameraWithSettings,
   };
 }

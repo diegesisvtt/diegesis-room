@@ -4,6 +4,7 @@ import { LayoutGroup, motion } from "framer-motion";
 import { Expand, Focus, LayoutGrid } from "lucide-react";
 import type { HostCamera, RoomStatus, RemoteGuest, Signal } from "./useLiveKitRoom";
 import { VideoTile, type Tile } from "./VideoTile";
+import { ParticipantContextMenu } from "./ParticipantContextMenu";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 
@@ -17,6 +18,7 @@ export function MeetingStage({
   guests,
   hostCameras,
   localCameraTracks,
+  personalCameraTrack,
   localScreenTrack,
   sharing,
   signals,
@@ -27,12 +29,19 @@ export function MeetingStage({
   isHost,
   spotlight,
   onSpotlightChange,
+  onToggleHostCamera,
+  onTogglePersonalCamera,
+  onSetVolume,
+  volumes,
+  onMute,
+  onRemove,
 }: {
   status: RoomStatus;
   statusText: string;
   guests: RemoteGuest[];
   hostCameras: HostCamera[];
   localCameraTracks: Record<string, LocalVideoTrack>;
+  personalCameraTrack: LocalVideoTrack | null;
   localScreenTrack: Tile["track"];
   sharing: boolean;
   signals: Record<string, Signal>;
@@ -43,6 +52,12 @@ export function MeetingStage({
   isHost: boolean;
   spotlight: string | null;
   onSpotlightChange?: (tile: string | null) => void;
+  onToggleHostCamera: (id: string) => void;
+  onTogglePersonalCamera: () => void;
+  onSetVolume: (identity: string, volume: number) => void;
+  volumes: Record<string, number>;
+  onMute: (identity: string, muted: boolean) => void;
+  onRemove: (identity: string) => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<Layout>("spotlight");
@@ -53,20 +68,33 @@ export function MeetingStage({
   }, [spotlight]);
 
   const tiles = useMemo<Tile[]>(() => {
+    // Câmera pessoal (host e guest): mostra o avatar/foto quando desligada.
+    const personalTile: Tile = {
+      identity: "local",
+      name: localName,
+      track: personalCameraTrack,
+      local: true,
+      photoUrl: localPhotoUrl,
+      speakerIdentity: localIdentity,
+    };
     const localTiles: Tile[] = isHost
-      ? hostCameras.map((cam) => ({
-          identity: `cam:${cam.id}`,
-          name: cam.name,
-          track: localCameraTracks[cam.id] ?? null,
-          camera: true,
-          local: true,
-          isHost: true,
-          speakerIdentity: localIdentity,
-        }))
-      : [{ identity: "local", name: localName, track: Object.values(localCameraTracks)[0] ?? null, local: true, photoUrl: localPhotoUrl, speakerIdentity: localIdentity }];
+      ? [
+          personalTile,
+          ...hostCameras.map((cam) => ({
+            identity: `cam:${cam.id}`,
+            name: cam.name,
+            track: localCameraTracks[cam.id] ?? null,
+            camera: true,
+            local: true,
+            isHost: true,
+            speakerIdentity: localIdentity,
+            cameraId: cam.id,
+          })),
+        ]
+      : [personalTile];
     const guestTiles: Tile[] = guests.flatMap((g): Tile[] =>
       g.isHost && g.cameras.length > 0
-        ? g.cameras.map((c) => ({ identity: `cam:${c.id}`, name: c.name, track: c.track, camera: true, isHost: true, speakerIdentity: g.identity }))
+        ? g.cameras.map((c) => ({ identity: `cam:${c.id}`, name: c.name, track: c.track, camera: true, isHost: true, speakerIdentity: g.identity, cameraId: c.id }))
         : [{ identity: g.identity, name: g.name, track: g.cameraTrack, isHost: g.isHost, photoUrl: g.photoUrl, color: pickColor(g.identity) }],
     );
     const screenTiles: Tile[] = guests
@@ -77,7 +105,7 @@ export function MeetingStage({
       : null;
 
     return [...localTiles, ...guestTiles, ...screenTiles, ...(localScreenTile ? [localScreenTile] : [])];
-  }, [guests, hostCameras, localCameraTracks, localScreenTrack, sharing, isHost, localName, localPhotoUrl, localIdentity]);
+  }, [guests, hostCameras, localCameraTracks, personalCameraTrack, localScreenTrack, sharing, isHost, localName, localPhotoUrl, localIdentity]);
 
   const focused = tiles.find((t) => t.identity === pinned) ?? tiles.find((t) => t.camera) ?? tiles[0];
 
@@ -106,6 +134,32 @@ export function MeetingStage({
     if (tile.screen) return false;
     if (!live) return false;
     return speakers.includes(tile.speakerIdentity ?? tile.identity);
+  }
+
+  function menuFor(tile: Tile) {
+    if (tile.screen) return { name: tile.name };
+    if (tile.local) {
+      return {
+        name: tile.name,
+        onToggleOwnCamera: tile.camera
+          ? () => onToggleHostCamera(tile.cameraId ?? "")
+          : onTogglePersonalCamera,
+        cameraOn: tile.camera
+          ? (hostCameras.find((c) => c.id === tile.cameraId)?.enabled ?? false)
+          : Boolean(personalCameraTrack),
+      };
+    }
+    const identity = tile.speakerIdentity ?? tile.identity;
+    const guest = guests.find((g) => g.identity === identity);
+    const muted = guest?.micMuted ?? false;
+    return {
+      name: tile.name,
+      onVolumeChange: (v: number) => onSetVolume(identity, v),
+      volume: volumes[identity] ?? 1,
+      remoteMuted: muted,
+      onMuteRemote: isHost ? () => onMute(identity, !muted) : undefined,
+      onRemoveRemote: isHost ? () => onRemove(identity) : undefined,
+    };
   }
 
   return (
@@ -163,37 +217,40 @@ export function MeetingStage({
         >
           {layout === "gallery" ? (
             tiles.map((tile) => (
-              <motion.div key={tile.identity} layout transition={tileTransition} className="flex min-h-0">
-                <VideoTile
-                  tile={tile}
-                  signal={signalFor(tile)}
-                  speaking={speakingFor(tile)}
-                  pinned={pinned === tile.identity}
-                  onPin={() => pin(tile)}
-                  onExpand={() => void fullscreen()}
-                  large
-                />
-              </motion.div>
-            ))
-          ) : (
-            <>
-              {focused && (
-                <motion.div
-                  key={focused.identity}
-                  layoutId={focused.identity}
-                  transition={tileTransition}
-                  className="flex min-h-0 min-w-0 flex-1"
-                >
+              <ParticipantContextMenu key={tile.identity} {...menuFor(tile)}>
+                <motion.div layout transition={tileTransition} className="flex min-h-0">
                   <VideoTile
-                    tile={focused}
-                    signal={signalFor(focused)}
-                    speaking={speakingFor(focused)}
-                    pinned
-                    onPin={() => pin(null)}
+                    tile={tile}
+                    signal={signalFor(tile)}
+                    speaking={speakingFor(tile)}
+                    pinned={pinned === tile.identity}
+                    onPin={() => pin(tile)}
                     onExpand={() => void fullscreen()}
                     large
                   />
                 </motion.div>
+              </ParticipantContextMenu>
+            ))
+          ) : (
+            <>
+              {focused && (
+                <ParticipantContextMenu key={focused.identity} {...menuFor(focused)}>
+                  <motion.div
+                    layoutId={focused.identity}
+                    transition={tileTransition}
+                    className="flex min-h-0 min-w-0 flex-1"
+                  >
+                    <VideoTile
+                      tile={focused}
+                      signal={signalFor(focused)}
+                      speaking={speakingFor(focused)}
+                      pinned
+                      onPin={() => pin(null)}
+                      onExpand={() => void fullscreen()}
+                      large
+                    />
+                  </motion.div>
+                </ParticipantContextMenu>
               )}
               <aside
                 className="flex w-24 shrink-0 flex-col gap-2 overflow-y-auto sm:w-36 lg:w-44"
@@ -202,16 +259,18 @@ export function MeetingStage({
                 {tiles
                   .filter((t) => t.identity !== focused?.identity)
                   .map((tile) => (
-                    <motion.div key={tile.identity} layoutId={tile.identity} transition={tileTransition} className="shrink-0">
-                      <VideoTile
-                        tile={tile}
-                        signal={signalFor(tile)}
-                        speaking={speakingFor(tile)}
-                        pinned={false}
-                        onPin={() => pin(tile)}
-                        onExpand={() => void fullscreen()}
-                      />
-                    </motion.div>
+                    <ParticipantContextMenu key={tile.identity} {...menuFor(tile)}>
+                      <motion.div layoutId={tile.identity} transition={tileTransition} className="shrink-0">
+                        <VideoTile
+                          tile={tile}
+                          signal={signalFor(tile)}
+                          speaking={speakingFor(tile)}
+                          pinned={false}
+                          onPin={() => pin(tile)}
+                          onExpand={() => void fullscreen()}
+                        />
+                      </motion.div>
+                    </ParticipantContextMenu>
                   ))}
               </aside>
             </>

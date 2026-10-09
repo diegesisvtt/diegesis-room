@@ -19,6 +19,8 @@ export type Tile = {
   color?: string;
   /** Identidade real do participante cujo estado de fala este tile reflete. */
   speakerIdentity?: string;
+  /** Id bruto da câmera do host (para tiles de câmera). */
+  cameraId?: string;
 };
 
 const entrance = { type: "spring", stiffness: 260, damping: 25 } as const;
@@ -77,7 +79,17 @@ export function VideoTile({
         <div className="pointer-events-none absolute inset-0 z-10 animate-pulse rounded-xl shadow-[inset_0_0_28px_color-mix(in_oklab,var(--color-success)_30%,transparent)]" />
       )}
       {tile.track ? (
-        <video ref={ref} autoPlay playsInline muted className="h-full w-full object-contain" />
+        <video
+          ref={ref}
+          autoPlay
+          playsInline
+          muted
+          className={cn(
+            "h-full w-full object-contain",
+            // Espelha só a câmera pessoal local (não as câmeras da mesa nem a tela).
+            tile.local && !tile.camera && !tile.screen && "-scale-x-100",
+          )}
+        />
       ) : tile.camera ? (
         <div className="flex h-full w-full flex-col items-center justify-center bg-muted">
           <VideoOff className="size-10 text-muted-foreground" />
