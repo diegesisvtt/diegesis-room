@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from "react";
-import { createLocalVideoTrack, Room, RoomEvent, Track, VideoPresets } from "livekit-client";
-import type { LocalVideoTrack, RemoteAudioTrack, RemoteVideoTrack } from "livekit-client";
+import { createLocalVideoTrack, LocalVideoTrack, Room, RoomEvent, Track, VideoPresets } from "livekit-client";
+import type { RemoteAudioTrack, RemoteVideoTrack } from "livekit-client";
 import { api, type TokenResponse } from "@/web/lib/api";
 import { loadSession, peekProfileToken } from "@/web/lib/session";
-import { getPreferences, setPreferences, shareQualityPresets, type ShareQuality } from "@/web/lib/preferences";
+import { getPreferences, setPreferences, shareQualityPresets, type AdditionalCamera, type CameraBackground, type ShareQuality } from "@/web/lib/preferences";
+import { createBackgroundPipeline, type BackgroundPipeline } from "./backgroundPipeline";
 
 export type RoomStatus = "idle" | "connecting" | "live" | "error";
 
@@ -18,6 +19,7 @@ export type RemoteGuest = {
   cameraTrack: RemoteVideoTrack | null;
   screenTrack: RemoteVideoTrack | null;
   audioTrack: RemoteAudioTrack | null;
+  micMuted: boolean;
 };
 
 type ParticipantMeta = { photo: string | null; audience: boolean };
@@ -58,22 +60,11 @@ type DataMessage = { type: "signal"; hand?: boolean; reaction?: string } | Camer
 
 const TOPIC = "mesa-data";
 
-function camerasKey(campaignId: string) {
-  return `diegesis:cameras:${campaignId}`;
-}
+/** Nome fixo da publicação da câmera pessoal (host e guest). */
+const PERSONAL_CAMERA_NAME = "personal";
 
 function spotlightKey(campaignId: string) {
   return `diegesis:spotlight:${campaignId}`;
-}
-
-function loadCameras(key: string): HostCamera[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    return (JSON.parse(raw) as HostCamera[]).map((cam) => ({ ...cam, enabled: false }));
-  } catch {
-    return [];
-  }
 }
 
 function loadSpotlight(key: string): string | null {
@@ -103,9 +94,11 @@ let status: RoomStatus = "idle";
 let guests: RemoteGuest[] = [];
 let hostCameras: HostCamera[] = [];
 let localCameraTracks: Record<string, LocalVideoTrack> = {};
+let personalCameraTrack: LocalVideoTrack | null = null;
 let localScreenTrack: LocalVideoTrack | null = null;
 let micOn = true;
 let cameraOn = false;
+let personalCameraPipeline: BackgroundPipeline | null = null;
 let sharing = false;
 let audioBlocked = false;
 let signals: Record<string, Signal> = {};
@@ -113,6 +106,7 @@ let speakers: string[] = [];
 let spotlight: string | null = null;
 let cameraErrors: Record<string, string> = {};
 let localIdentity = "local";
+let volumes: Record<string, number> = {};
 
 let activeCampaignId: string | null = null;
 let activeChannelId: string | null = null;
@@ -132,6 +126,7 @@ export type VoiceSnapshot = {
   guests: RemoteGuest[];
   hostCameras: HostCamera[];
   localCameraTracks: Record<string, LocalVideoTrack>;
+  personalCameraTrack: LocalVideoTrack | null;
   localScreenTrack: LocalVideoTrack | null;
   micOn: boolean;
   cameraOn: boolean;
@@ -142,6 +137,7 @@ export type VoiceSnapshot = {
   spotlight: string | null;
   cameraErrors: Record<string, string>;
   localIdentity: string;
+  volumes: Record<string, number>;
   activeCampaignId: string | null;
   activeChannelId: string | null;
   channelName: string;
@@ -149,19 +145,16 @@ export type VoiceSnapshot = {
   participantName: string;
 };
 
-function anyCameraOn(): boolean {
-  return role === "host" ? hostCameras.some((c) => c.enabled) : cameraOn;
-}
-
 function buildSnapshot(): VoiceSnapshot {
   return {
     status,
     guests,
     hostCameras,
     localCameraTracks,
+    personalCameraTrack,
     localScreenTrack,
     micOn,
-    cameraOn: anyCameraOn(),
+    cameraOn,
     sharing,
     audioBlocked,
     signals,
@@ -169,6 +162,7 @@ function buildSnapshot(): VoiceSnapshot {
     spotlight,
     cameraErrors,
     localIdentity,
+    volumes,
     activeCampaignId,
     activeChannelId,
     channelName,
@@ -211,6 +205,25 @@ function isDeviceMissing(error: unknown): boolean {
   return error instanceof DOMException && (error.name === "OverconstrainedError" || error.name === "NotFoundError");
 }
 
+/** Traduz erros comuns de acesso à câmera para uma mensagem legível. */
+function cameraErrorMessage(error: unknown): string {
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError" || error.name === "SecurityError") {
+      return "Permissão de câmera negada pelo navegador.";
+    }
+    if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+      return "Nenhuma câmera encontrada neste dispositivo.";
+    }
+    if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+      return "Câmera em uso por outro aplicativo.";
+    }
+    if (error.name === "OverconstrainedError") {
+      return "A câmera escolhida não suporta a configuração solicitada.";
+    }
+  }
+  return error instanceof Error && error.message ? error.message : "Não foi possível acessar a câmera.";
+}
+
 function micOptions() {
   const prefs = getPreferences();
   return {
@@ -220,14 +233,6 @@ function micOptions() {
     channelCount: prefs.stereo ? 2 : 1,
     ...(prefs.noiseCancellation === "voice-isolation" ? { voiceIsolation: true } : {}),
     ...deviceConstraint(prefs.microphoneDeviceId),
-  };
-}
-
-function cameraOptions() {
-  const prefs = getPreferences();
-  return {
-    resolution: qualityPresets[prefs.cameraQuality].preset.resolution,
-    ...deviceConstraint(prefs.cameraDeviceId),
   };
 }
 
@@ -253,14 +258,69 @@ async function enableMicWithFallback(room: Room) {
   }
 }
 
-/** Liga a câmera pessoal; se o dispositivo salvo sumiu, volta ao padrão do sistema. */
-async function enableCameraWithFallback(room: Room) {
+/** Publica a câmera pessoal (host e guest), com fallback de dispositivo e fundo virtual. */
+async function publishPersonalCamera(room: Room, background: CameraBackground) {
+  const prefs = getPreferences();
+  const resolution = qualityPresets[prefs.cameraQuality].preset.resolution;
+
+  async function acquire(deviceId: string): Promise<MediaStream> {
+    return navigator.mediaDevices.getUserMedia({
+      video: {
+        ...(deviceId && deviceId !== "default" ? { deviceId: { exact: deviceId } } : {}),
+        width: resolution.width,
+        height: resolution.height,
+      },
+      audio: false,
+    });
+  }
+
+  let stream: MediaStream;
   try {
-    await room.localParticipant.setCameraEnabled(true, cameraOptions());
+    stream = await acquire(prefs.cameraDeviceId);
   } catch (error) {
     if (!isDeviceMissing(error)) throw error;
     setPreferences({ cameraDeviceId: "default" });
-    await room.localParticipant.setCameraEnabled(true, cameraOptions());
+    stream = await acquire("default");
+  }
+
+  let track: LocalVideoTrack;
+  if (background.mode === "none") {
+    track = new LocalVideoTrack(stream.getVideoTracks()[0]!, undefined, true);
+  } else {
+    const pipeline = await createBackgroundPipeline({
+      stream,
+      background,
+      width: resolution.width,
+      height: resolution.height,
+    });
+    personalCameraPipeline = pipeline;
+    track = new LocalVideoTrack(pipeline.track, undefined, true);
+  }
+  await room.localParticipant.publishTrack(track, {
+    source: Track.Source.Camera,
+    name: PERSONAL_CAMERA_NAME,
+  });
+}
+
+/** Desliga/despublica a câmera pessoal (processada ou não). */
+async function disablePersonalCamera(room: Room) {
+  // Captura a referência antes de despublicar: `unpublishTrack` limpa o
+  // `publication.track` sincronamente, o que tornaria o acesso posterior indefinido.
+  const track = room.localParticipant.getTrackPublicationByName(PERSONAL_CAMERA_NAME)?.track;
+  if (track) {
+    await room.localParticipant.unpublishTrack(track);
+    track.stop();
+  }
+  personalCameraPipeline?.stop();
+  personalCameraPipeline = null;
+}
+
+/** Liga a câmera pessoal aplicando o fundo salvo, com mensagem de erro amigável. */
+async function enablePersonalCamera(room: Room, background: CameraBackground) {
+  try {
+    await publishPersonalCamera(room, background);
+  } catch (error) {
+    throw new Error(cameraErrorMessage(error));
   }
 }
 
@@ -292,17 +352,32 @@ function syncGuests(room: Room) {
         cameraTrack: cameras[0]?.track ?? null,
         screenTrack: (screenPub?.track as RemoteVideoTrack | undefined) ?? null,
         audioTrack: (micPub?.track as RemoteAudioTrack | undefined) ?? null,
+        micMuted: Boolean(micPub?.isMuted),
       };
     });
   guests = list;
+  applyVolumes();
+}
+
+function applyVolumes() {
+  for (const guest of guests) {
+    const vol = volumes[guest.identity];
+    if (vol !== undefined && guest.audioTrack) guest.audioTrack.setVolume(vol);
+  }
 }
 
 function syncLocal(room: Room) {
   const tracks: Record<string, LocalVideoTrack> = {};
+  let personal: LocalVideoTrack | null = null;
   for (const pub of room.localParticipant.trackPublications.values()) {
-    if (pub.source === Track.Source.Camera && pub.track) tracks[pub.trackName] = pub.track as LocalVideoTrack;
+    if (pub.source === Track.Source.Camera && pub.track) {
+      const track = pub.track as LocalVideoTrack;
+      if (pub.trackName === PERSONAL_CAMERA_NAME) personal = track;
+      else tracks[pub.trackName] = track;
+    }
   }
   localCameraTracks = tracks;
+  personalCameraTrack = personal;
   const screenPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
   localScreenTrack = (screenPub?.track as LocalVideoTrack | undefined) ?? null;
   sharing = Boolean(screenPub?.track && !screenPub.isMuted);
@@ -325,11 +400,6 @@ function broadcastCameras(cameras: HostCamera[], spot: string | null) {
 function updateCameras(next: HostCamera[]) {
   hostCameras = next;
   hostCamerasRef = next;
-  try {
-    if (activeCampaignId) localStorage.setItem(camerasKey(activeCampaignId), JSON.stringify(next));
-  } catch {
-    /* ignore */
-  }
   broadcastCameras(next, spotlightRef);
   emit();
 }
@@ -421,15 +491,19 @@ function resetTransient() {
   status = "idle";
   guests = [];
   localCameraTracks = {};
+  personalCameraTrack = null;
   localScreenTrack = null;
   sharing = false;
   cameraOn = false;
+  personalCameraPipeline?.stop();
+  personalCameraPipeline = null;
   signals = {};
   speakers = [];
   audioBlocked = false;
   channelName = "";
   hostIdentityRef = null;
   rosterRef = [];
+  volumes = {};
 }
 
 export async function connect(opts: UseLiveKitRoomOptions) {
@@ -461,7 +535,7 @@ export async function connect(opts: UseLiveKitRoomOptions) {
   audience = opts.audience ?? false;
 
   if (role === "host") {
-    hostCameras = loadCameras(camerasKey(opts.campaignId));
+    hostCameras = getPreferences().cameras.map((cam: AdditionalCamera) => ({ ...cam, enabled: false }));
     hostCamerasRef = hostCameras;
     spotlight = loadSpotlight(spotlightKey(opts.campaignId));
     spotlightRef = spotlight;
@@ -530,10 +604,11 @@ export async function connect(opts: UseLiveKitRoomOptions) {
     audioBlocked = !room.canPlaybackAudio;
     await applySpeakerDevice(room);
     await enableMicWithFallback(room);
+    // Câmera pessoal vale para host e guest; o host ainda tem as câmeras da mesa.
+    if (cameraOn) await enablePersonalCamera(room, getPreferences().cameraBackground);
     if (role === "host") {
       broadcastCameras(hostCamerasRef, spotlightRef);
     } else {
-      if (cameraOn) await enableCameraWithFallback(room);
       void room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({ type: "cameras-request" })), {
         reliable: true,
         topic: TOPIC,
@@ -576,9 +651,29 @@ export async function toggleCamera() {
   const next = !cameraOn;
   const room = roomRef.current;
   if (room) {
-    await room.localParticipant.setCameraEnabled(next, cameraOptions());
+    if (next) await enablePersonalCamera(room, getPreferences().cameraBackground);
+    else await disablePersonalCamera(room);
   }
   cameraOn = next;
+  emit();
+}
+
+/** Aplica dispositivo, qualidade e fundo, ligando (ou reiniciando) a câmera pessoal. */
+export async function enableCameraWithSettings(opts: {
+  deviceId?: string;
+  quality?: CameraQuality;
+  background?: CameraBackground;
+}) {
+  if (opts.deviceId !== undefined) setPreferences({ cameraDeviceId: opts.deviceId });
+  if (opts.quality !== undefined) setPreferences({ cameraQuality: opts.quality });
+  if (opts.background !== undefined) setPreferences({ cameraBackground: opts.background });
+
+  const room = roomRef.current;
+  if (!room) return;
+
+  if (cameraOn) await disablePersonalCamera(room);
+  await enablePersonalCamera(room, getPreferences().cameraBackground);
+  cameraOn = true;
   emit();
 }
 
@@ -625,18 +720,6 @@ export function sendSignal(data: { hand?: boolean; reaction?: string }) {
   emit();
 }
 
-export async function addCamera(name: string, deviceId: string) {
-  const cam: HostCamera = { id: `cam-${crypto.randomUUID().slice(0, 8)}`, name, deviceId, enabled: true };
-  updateCameras([...hostCamerasRef, cam]);
-  await publishCamera(cam);
-}
-
-export function removeCamera(id: string) {
-  unpublishCamera(id);
-  updateCameras(hostCamerasRef.filter((c) => c.id !== id));
-  if (spotlightRef === id) setSpotlight(null);
-}
-
 export async function toggleHostCamera(id: string) {
   const cam = hostCamerasRef.find((c) => c.id === id);
   if (!cam) return;
@@ -645,16 +728,23 @@ export async function toggleHostCamera(id: string) {
   else await publishCamera({ ...cam, enabled: true });
 }
 
-export async function updateCamera(id: string, patch: { name?: string; deviceId?: string; quality?: CameraQuality }) {
-  const cam = hostCamerasRef.find((c) => c.id === id);
-  if (!cam) return;
-  const updated = { ...cam, ...patch };
-  updateCameras(hostCamerasRef.map((c) => (c.id === id ? updated : c)));
-  const captureChanged = (patch.deviceId && patch.deviceId !== cam.deviceId) || (patch.quality && patch.quality !== (cam.quality ?? "720"));
-  if (updated.enabled && captureChanged) {
-    unpublishCamera(id);
-    await publishCamera(updated);
+/** Liga/desliga todas as câmeras do host de uma vez (ícone de câmera). */
+export async function toggleAllHostCameras() {
+  const anyOn = hostCamerasRef.some((c) => c.enabled);
+  const next = hostCamerasRef.map((c) => ({ ...c, enabled: !anyOn }));
+  updateCameras(next);
+  for (const cam of next) {
+    if (cam.enabled) await publishCamera(cam);
+    else unpublishCamera(cam.id);
   }
+}
+
+/** Ajusta o volume individual de um participante remoto (0..1). */
+export function setParticipantVolume(identity: string, volume: number) {
+  volumes = { ...volumes, [identity]: volume };
+  const guest = guests.find((g) => g.identity === identity);
+  guest?.audioTrack?.setVolume(volume);
+  emit();
 }
 
 export function setSpotlight(id: string | null) {
