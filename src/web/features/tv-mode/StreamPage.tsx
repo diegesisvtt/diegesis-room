@@ -157,7 +157,7 @@ export function StreamPage() {
     let reconnect: ReturnType<typeof setTimeout> | null = null;
 
     function open() {
-      ws = new WebSocket(wsUrl(channelId));
+      ws = new WebSocket(wsUrl(channelId, undefined, undefined, true));
       ws.onmessage = (event) => {
         let data: { type?: string; message?: Message };
         try {

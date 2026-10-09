@@ -122,6 +122,8 @@ setInterval(() => {
 }, WATCH_INTERVAL_MS);
 
 const authorizedSockets = new WeakSet<object>();
+// Audiência (modo streaming): recebe mensagens, mas não pode enviar.
+const audienceSockets = new WeakSet<object>();
 const socketProfileTokens = new WeakMap<object, string>();
 // Mapa reverso para derrubar sockets de um perfil (kick/ban/reject).
 const socketsByProfileToken = new Map<string, Set<{ close: () => void }>>();
@@ -144,25 +146,30 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
   open(ws) {
     const channelId = ws.data.params.id;
     const profileToken = ws.data.query.profileToken;
-    // Só membros ativos da campanha recebem/enviam chat em tempo real.
+    const isAudience = ws.data.query.audience === "1";
+    // Membros ativos enviam/recebem; audiência (modo streaming) só recebe.
     void (async () => {
       const campaignId = await campaignIdOfChannel(channelId);
       const check = campaignId
         ? await memberGuard(campaignId, null, profileToken)
         : ({ ok: false } as const);
-      if (!check.ok) {
+      if (!check.ok && !isAudience) {
         ws.close();
         return;
       }
-      authorizedSockets.add(ws.raw);
-      if (profileToken) {
-        socketProfileTokens.set(ws.raw, profileToken);
-        let set = socketsByProfileToken.get(profileToken);
-        if (!set) {
-          set = new Set();
-          socketsByProfileToken.set(profileToken, set);
+      if (isAudience) {
+        audienceSockets.add(ws.raw);
+      } else {
+        authorizedSockets.add(ws.raw);
+        if (profileToken) {
+          socketProfileTokens.set(ws.raw, profileToken);
+          let set = socketsByProfileToken.get(profileToken);
+          if (!set) {
+            set = new Set();
+            socketsByProfileToken.set(profileToken, set);
+          }
+          set.add(ws.raw);
         }
-        set.add(ws.raw);
       }
       subscribe(channelId, ws.raw);
       // On reconnect the client passes ?since=<lastMessageId> to fill only the gap.
@@ -182,6 +189,7 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
   },
   close(ws) {
     const channelId = ws.data.params.id;
+    audienceSockets.delete(ws.raw);
     const profileToken = socketProfileTokens.get(ws.raw);
     if (profileToken) {
       const set = socketsByProfileToken.get(profileToken);

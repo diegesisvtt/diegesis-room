@@ -55,7 +55,7 @@ export function ChannelView() {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {inVoice && (
           <div className="flex min-h-[40dvh] flex-1 flex-col lg:min-h-0">
-            <VoiceStage channelId={channel.id} session={context.session} onLeave={leaveVoice} />
+            <VoiceStage channelId={channel.id} channelName={channel.name} session={context.session} onLeave={leaveVoice} />
           </div>
         )}
         <div

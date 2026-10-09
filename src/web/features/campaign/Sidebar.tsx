@@ -20,6 +20,8 @@ import {
 import { api, type Channel, type Invite } from "@/web/lib/api";
 import { clearSession, getProfileToken, type Session } from "@/web/lib/session";
 import { useAuth } from "@/web/features/auth/useAuth";
+import { VoiceDock } from "@/web/features/meeting/VoiceDock";
+import { disconnect as disconnectVoice } from "@/web/features/meeting/voiceStore";
 import { ProfileFields, type ProfileFieldsValue } from "@/web/components/ProfileFields";
 import { cn, initials } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
@@ -91,6 +93,7 @@ export function Sidebar({ context }: { context: CampaignContext }) {
   }
 
   function leave() {
+    disconnectVoice();
     clearSession();
     navigate("/");
   }
@@ -143,6 +146,7 @@ export function Sidebar({ context }: { context: CampaignContext }) {
       </ScrollArea>
 
       <div className="border-t border-accent/10 p-3">
+        <VoiceDock />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

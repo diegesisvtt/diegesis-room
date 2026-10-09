@@ -12,6 +12,7 @@ import {
 import { api, type Campaign, type Channel } from "@/web/lib/api";
 import { Button } from "@/web/components/ui/button";
 import { EmberParticles } from "@/web/components/EmberParticles";
+import { disconnect as disconnectVoice } from "@/web/features/meeting/voiceStore";
 import { Sidebar } from "./Sidebar";
 import type { CampaignContext } from "./types";
 
@@ -42,6 +43,7 @@ export function CampaignPage() {
 
   useEffect(() => {
     if (!session || session.campaignId !== campaignId) {
+      disconnectVoice();
       navigate("/");
       return;
     }
@@ -58,6 +60,7 @@ export function CampaignPage() {
         .then(({ profile }) => {
           // Perfil nulo: expulso/rejeitado — encerra a sessão local.
           if (!profile) {
+            disconnectVoice();
             clearSession();
             navigate("/");
             return;

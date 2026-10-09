@@ -251,12 +251,13 @@ export const api = {
     request<UserPreferences>("/api/preferences", { method: "PUT", body: JSON.stringify(patch) }),
 };
 
-export function wsUrl(channelId: string, since?: string, profileToken?: string): string {
+export function wsUrl(channelId: string, since?: string, profileToken?: string, audience?: boolean): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
   const params = new URLSearchParams();
   if (since) params.set("since", since);
   if (profileToken) params.set("profileToken", profileToken);
+  if (audience) params.set("audience", "1");
   const query = params.size > 0 ? `?${params.toString()}` : "";
   return `${proto}//${host}/ws/channels/${channelId}${query}`;
 }

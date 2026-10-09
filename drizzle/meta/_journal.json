@@ -50,6 +50,34 @@
       "when": 1791484919381,
       "tag": "0006_hot_puck",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791565890678,
+      "tag": "0007_sour_terrax",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791566361825,
+      "tag": "0008_steady_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1791568047707,
+      "tag": "0009_magenta_meggan",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791568556711,
+      "tag": "0010_closed_rick_jones",
+      "breakpoints": true
     }
   ]
 }

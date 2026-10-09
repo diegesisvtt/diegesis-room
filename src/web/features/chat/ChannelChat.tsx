@@ -3,7 +3,8 @@ import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import { Dices, Send, WifiOff } from "lucide-react";
 import { api, wsUrl, type Message } from "@/web/lib/api";
 import { displayName, loadSession, peekProfileToken } from "@/web/lib/session";
-import { rollFormula } from "@/web/features/dice/diceBox";
+import { animateRoll, parseRollPayload, rollFormula } from "@/web/features/dice/diceBox";
+import { getPreferences } from "@/web/lib/preferences";
 import { DiceRoller } from "@/web/features/dice/DiceRoller";
 import { cn, formatTime, initials } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
@@ -49,6 +50,14 @@ export function ChannelChat({ channelId }: { channelId: string }) {
           for (const message of data.messages) append(message);
         } else if (data.type === "message" && data.message) {
           append(data.message);
+          // Rola os dados 3D das rolagens de outros participantes (se habilitado).
+          if (
+            data.message.kind === "roll" &&
+            data.message.authorName !== authorName &&
+            getPreferences().showOthersRolls
+          ) {
+            void animateRoll(parseRollPayload(data.message.rollJson));
+          }
         }
       };
       ws.onclose = () => {

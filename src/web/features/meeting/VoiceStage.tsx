@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/web/lib/api";
 import { displayName, type Session } from "@/web/lib/session";
 import { useLiveKitRoom } from "./useLiveKitRoom";
 import { MeetingStage } from "./MeetingStage";
 import { Controls } from "./Controls";
-import { AudioRenderer } from "./AudioRenderer";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { DevicesDialog } from "./DevicesDialog";
 import { Loader2, UserX, VolumeX } from "lucide-react";
@@ -13,10 +12,12 @@ import { Button } from "@/web/components/ui/button";
 
 export function VoiceStage({
   channelId,
+  channelName,
   session,
   onLeave,
 }: {
   channelId: string;
+  channelName?: string;
   session: Session;
   onLeave: () => void;
 }) {
@@ -28,15 +29,10 @@ export function VoiceStage({
   const meeting = useLiveKitRoom({
     campaignId: session.campaignId,
     channelId,
+    channelName,
     participantName: myName,
     role: session.role,
   });
-
-  // Entrada direta: o palco só é montado quando o usuário clica em "Entrar na voz".
-  useEffect(() => {
-    if (meeting.status === "idle") void meeting.connect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const statusText = { idle: "Conectando…", connecting: "Conectando…", live: "Sessão ao vivo", error: "Erro de conexão" }[meeting.status];
 
@@ -114,9 +110,6 @@ export function VoiceStage({
         spotlight={meeting.spotlight}
         onSpotlightChange={isHost ? meeting.setSpotlight : undefined}
       />
-      {meeting.guests.map((guest) => (
-        <AudioRenderer key={guest.identity} track={guest.audioTrack} />
-      ))}
       {meeting.audioBlocked && (
         <div className="mx-3 mb-1 flex items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2">
           <div className="flex items-center gap-2 text-xs text-foreground">

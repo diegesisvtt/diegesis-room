@@ -1,0 +1,1 @@
+ALTER TABLE `user_preferences` ADD `noise_cancellation` text DEFAULT 'none' NOT NULL;

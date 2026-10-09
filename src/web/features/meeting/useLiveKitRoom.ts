@@ -1,523 +1,102 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createLocalVideoTrack, Room, RoomEvent, Track, VideoPresets } from "livekit-client";
-import type { LocalVideoTrack, RemoteAudioTrack, RemoteVideoTrack } from "livekit-client";
-import { api, type TokenResponse } from "@/web/lib/api";
-import { loadSession, peekProfileToken } from "@/web/lib/session";
-import { setPreferences, shareQualityPresets, usePreferences, type ShareQuality } from "@/web/lib/preferences";
+import { useEffect, useRef } from "react";
+import { Track } from "livekit-client";
+import type { LocalAudioTrack } from "livekit-client";
+import { usePreferences } from "@/web/lib/preferences";
+import {
+  addCamera,
+  connect as connectRoom,
+  disconnect as disconnectRoom,
+  enableAudio,
+  removeCamera,
+  roomRef,
+  sendSignal,
+  setShareQuality,
+  setSpotlight,
+  toggleCamera,
+  toggleHostCamera,
+  toggleMic,
+  toggleShare,
+  updateCamera,
+  useVoiceRoom,
+  type UseLiveKitRoomOptions,
+} from "./voiceStore";
 
-export type RoomStatus = "idle" | "connecting" | "live" | "error";
+export type {
+  CameraQuality,
+  HostCamera,
+  RemoteCamera,
+  RemoteGuest,
+  RoomStatus,
+  Signal,
+  UseLiveKitRoomOptions,
+  VoiceSnapshot,
+} from "./voiceStore";
+export type { ShareQuality } from "./voiceStore";
 
-export type RemoteCamera = { id: string; name: string; track: RemoteVideoTrack | null };
-
-export type RemoteGuest = {
-  identity: string;
-  name: string;
-  isHost: boolean;
-  photoUrl: string | null;
-  cameras: RemoteCamera[];
-  cameraTrack: RemoteVideoTrack | null;
-  screenTrack: RemoteVideoTrack | null;
-  audioTrack: RemoteAudioTrack | null;
-};
-
-type ParticipantMeta = { photo: string | null; audience: boolean };
-
-function parseMetadata(metadata: string | undefined): ParticipantMeta {
-  if (!metadata) return { photo: null, audience: false };
-  try {
-    const data = JSON.parse(metadata) as { photo?: unknown; audience?: unknown };
-    return { photo: typeof data.photo === "string" ? data.photo : null, audience: data.audience === true };
-  } catch {
-    return { photo: null, audience: false };
-  }
-}
-
-function isAudience(participant: { metadata?: string; permissions?: { canPublish?: boolean } }): boolean {
-  return participant.permissions?.canPublish === false || parseMetadata(participant.metadata).audience;
-}
-
-export type CameraQuality = "360" | "540" | "720" | "1080" | "1440" | "2160";
-
-const qualityPresets: Record<CameraQuality, { preset: (typeof VideoPresets)[keyof typeof VideoPresets]; simulcast: (typeof VideoPresets)[keyof typeof VideoPresets][] }> = {
-  "360": { preset: VideoPresets.h360, simulcast: [VideoPresets.h180] },
-  "540": { preset: VideoPresets.h540, simulcast: [VideoPresets.h180] },
-  "720": { preset: VideoPresets.h720, simulcast: [VideoPresets.h360, VideoPresets.h180] },
-  "1080": { preset: VideoPresets.h1080, simulcast: [VideoPresets.h540, VideoPresets.h360, VideoPresets.h180] },
-  "1440": { preset: VideoPresets.h1440, simulcast: [VideoPresets.h720, VideoPresets.h360, VideoPresets.h180] },
-  "2160": { preset: VideoPresets.h2160, simulcast: [VideoPresets.h1080, VideoPresets.h540, VideoPresets.h180] },
-};
-
-export type HostCamera = { id: string; name: string; deviceId: string; enabled: boolean; quality?: CameraQuality };
-
-export type { ShareQuality } from "@/web/lib/preferences";
-
-export type Signal = { hand?: boolean; reaction?: string; expires?: number };
-
-type CamerasMessage = { type: "cameras"; cameras: { id: string; name: string }[]; spotlight: string | null };
-type DataMessage = { type: "signal"; hand?: boolean; reaction?: string } | CamerasMessage | { type: "cameras-request" };
-
-const TOPIC = "mesa-data";
-
-function camerasKey(campaignId: string) {
-  return `diegesis:cameras:${campaignId}`;
-}
-
-function spotlightKey(campaignId: string) {
-  return `diegesis:spotlight:${campaignId}`;
-}
-
-function loadCameras(key: string): HostCamera[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    return (JSON.parse(raw) as HostCamera[]).map((cam) => ({ ...cam, enabled: false }));
-  } catch {
-    return [];
-  }
-}
-
-function loadSpotlight(key: string): string | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    return raw.startsWith("cam-") ? `cam:${raw}` : raw;
-  } catch {
-    return null;
-  }
-}
-
-export type UseLiveKitRoomOptions = {
-  campaignId: string;
-  channelId: string;
-  participantName: string;
-  role: "host" | "guest";
-  audience?: boolean;
-};
-
-export function useLiveKitRoom({ campaignId, channelId, participantName, role, audience = false }: UseLiveKitRoomOptions) {
-  const storageKeys = useRef({ cameras: camerasKey(campaignId), spotlight: spotlightKey(campaignId) }).current;
-  const roomRef = useRef<Room | null>(null);
-  const [status, setStatus] = useState<RoomStatus>("idle");
-  const [guests, setGuests] = useState<RemoteGuest[]>([]);
-  const [hostCameras, setHostCameras] = useState<HostCamera[]>(() => (role === "host" ? loadCameras(storageKeys.cameras) : []));
-  const [localCameraTracks, setLocalCameraTracks] = useState<Record<string, LocalVideoTrack>>({});
-  const [localScreenTrack, setLocalScreenTrack] = useState<LocalVideoTrack | null>(null);
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [audioBlocked, setAudioBlocked] = useState(false);
+/**
+ * Hook fino sobre o store global de voz. A sala agora vive fora do React
+ * (voiceStore), então trocar de canal ou abrir as configurações NÃO desconecta
+ * mais — o áudio e a conexão persistem até um "Sair" explícito.
+ */
+export function useLiveKitRoom({ campaignId, channelId, channelName, participantName, role, audience = false }: UseLiveKitRoomOptions) {
+  const voice = useVoiceRoom();
   const preferences = usePreferences();
-  const shareQuality = preferences.shareQuality;
-  const shareQualityRef = useRef(shareQuality);
-  shareQualityRef.current = shareQuality;
-  const preferencesRef = useRef(preferences);
-  preferencesRef.current = preferences;
+  const noiseProcessorRef = useRef<LocalAudioTrack | null>(null);
 
-  function micOptions() {
-    const prefs = preferencesRef.current;
-    return {
-      echoCancellation: prefs.echoCancellation,
-      noiseSuppression: prefs.noiseSuppression,
-      autoGainControl: prefs.autoGainControl,
-      channelCount: prefs.stereo ? 2 : 1,
-    };
-  }
+  // Conecta (idempotente) e move de sala quando canal/campanha muda.
+  useEffect(() => {
+    void connectRoom({ campaignId, channelId, channelName, participantName, role, audience });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId, channelId]);
 
-  function cameraOptions() {
-    return { resolution: qualityPresets[preferencesRef.current.cameraQuality].preset.resolution };
-  }
-  const [signals, setSignals] = useState<Record<string, Signal>>({});
-  const [speakers, setSpeakers] = useState<string[]>([]);
-  const [spotlight, setSpotlightState] = useState<string | null>(() => (role === "host" ? loadSpotlight(storageKeys.spotlight) : null));
-  const [cameraErrors, setCameraErrors] = useState<Record<string, string>>({});
-  const localIdentityRef = useRef("local");
-  const connectingRef = useRef(false);
-  const hostCamerasRef = useRef(hostCameras);
-  const spotlightRef = useRef(spotlight);
-  const hostIdentityRef = useRef<string | null>(null);
-  const rosterRef = useRef<{ id: string; name: string }[]>([]);
-
-  const syncGuests = useCallback((room: Room) => {
-    const roster = rosterRef.current;
-    const hostId = hostIdentityRef.current;
-    const list = Array.from(room.remoteParticipants.values())
-      // Audiência (modo streaming) é subscribe-only: nunca aparece no palco.
-      .filter((participant) => !isAudience(participant))
-      .map((participant) => {
-        const cameraPubs = Array.from(participant.trackPublications.values()).filter(
-          (pub) => pub.source === Track.Source.Camera,
-        );
-        const isHost = participant.identity === hostId;
-        const cameras: RemoteCamera[] = cameraPubs.map((pub) => ({
-          id: pub.trackName,
-          name: (isHost && roster.find((c) => c.id === pub.trackName)?.name) || participant.name || participant.identity,
-          track: (pub.track as RemoteVideoTrack | undefined) ?? null,
-        }));
-        const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);
-        const micPub = participant.getTrackPublication(Track.Source.Microphone);
-        return {
-          identity: participant.identity,
-          name: participant.name || participant.identity,
-          isHost,
-          photoUrl: parseMetadata(participant.metadata).photo,
-          cameras,
-          cameraTrack: cameras[0]?.track ?? null,
-          screenTrack: (screenPub?.track as RemoteVideoTrack | undefined) ?? null,
-          audioTrack: (micPub?.track as RemoteAudioTrack | undefined) ?? null,
-        };
-      });
-    setGuests(list);
-  }, []);
-
-  const syncLocal = useCallback((room: Room) => {
-    const tracks: Record<string, LocalVideoTrack> = {};
-    for (const pub of room.localParticipant.trackPublications.values()) {
-      if (pub.source === Track.Source.Camera && pub.track) tracks[pub.trackName] = pub.track as LocalVideoTrack;
-    }
-    setLocalCameraTracks(tracks);
-    const screenPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
-    setLocalScreenTrack((screenPub?.track as LocalVideoTrack | undefined) ?? null);
-    setSharing(Boolean(screenPub?.track && !screenPub.isMuted));
-  }, []);
-
-  const broadcastCameras = useCallback((cameras: HostCamera[], spot: string | null) => {
+  // Aplica/remove o cancelamento de ruído aprimorado (Krisp) no microfone local,
+  // reagindo à preferência e ao estado da sala/microfone.
+  useEffect(() => {
     const room = roomRef.current;
-    if (!room || role !== "host") return;
-    const message: CamerasMessage = {
-      type: "cameras",
-      cameras: cameras.map(({ id, name }) => ({ id, name })),
-      spotlight: spot,
-    };
-    void room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(message)), {
-      reliable: true,
-      topic: TOPIC,
-    });
-  }, [role]);
+    const micTrack = room?.localParticipant.getTrackPublication(Track.Source.Microphone)
+      ?.track as LocalAudioTrack | undefined;
+    const wantKrisp = preferences.noiseCancellation === "krisp" && voice.micOn && Boolean(micTrack);
 
-  const updateCameras = useCallback(
-    (next: HostCamera[]) => {
-      setHostCameras(next);
-      hostCamerasRef.current = next;
-      try {
-        localStorage.setItem(storageKeys.cameras, JSON.stringify(next));
-      } catch {
-        /* ignore */
+    if (!wantKrisp || !micTrack) {
+      const prev = noiseProcessorRef.current;
+      if (prev) {
+        noiseProcessorRef.current = null;
+        void prev.stopProcessor().catch(() => {});
       }
-      broadcastCameras(next, spotlightRef.current);
-    },
-    [broadcastCameras],
-  );
-
-  async function publishCamera(cam: HostCamera) {
-    const room = roomRef.current;
-    if (!room || room.localParticipant.getTrackPublicationByName(cam.id)) return;
-    const { preset, simulcast } = qualityPresets[cam.quality ?? "720"];
-    try {
-      const track = await createLocalVideoTrack({
-        resolution: preset.resolution,
-        ...(cam.deviceId && cam.deviceId !== "default" ? { deviceId: { exact: cam.deviceId } } : {}),
-      });
-      await room.localParticipant.publishTrack(track, {
-        source: Track.Source.Camera,
-        name: cam.id,
-        videoSimulcastLayers: simulcast,
-      });
-      setCameraErrors((current) => {
-        if (!(cam.id in current)) return current;
-        const next = { ...current };
-        delete next[cam.id];
-        return next;
-      });
-    } catch (error) {
-      console.error(error);
-      const reason =
-        error instanceof DOMException && error.name === "NotReadableError"
-          ? "Dispositivo em uso por outro aplicativo ou câmera."
-          : error instanceof DOMException && error.name === "OverconstrainedError"
-            ? "Dispositivo não encontrado. Escolha outro na lista."
-            : "Não foi possível acessar o dispositivo.";
-      setCameraErrors((current) => ({ ...current, [cam.id]: reason }));
+      return;
     }
-  }
 
-  function unpublishCamera(id: string) {
-    const room = roomRef.current;
-    const track = room?.localParticipant.getTrackPublicationByName(id)?.track;
-    if (room && track) {
-      room.localParticipant.unpublishTrack(track);
-      track.stop();
-    }
-    setCameraErrors((current) => {
-      if (!(id in current)) return current;
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
-  }
-
-  const connect = useCallback(async () => {
-    if (connectingRef.current || status === "connecting" || status === "live") return;
-    connectingRef.current = true;
-    setStatus("connecting");
-    try {
-      const session = loadSession();
-      const credentials: TokenResponse = await api.getToken({
-        channelId,
-        participantName,
-        audience,
-        profileToken: session ? peekProfileToken(session.campaignId) : undefined,
-      });
-      const room = new Room({
-        dynacast: true,
-        publishDefaults: {
-          videoCodec: "av1",
-          backupCodec: true,
-          screenShareEncoding: { maxBitrate: 4_000_000, maxFramerate: 30 },
-          degradationPreference: "maintain-resolution",
-        },
-      });
-      const sync = () => {
-        syncGuests(room);
-        syncLocal(room);
-      };
-      room.on(RoomEvent.ParticipantConnected, () => {
-        sync();
-        if (role === "host") {
-          broadcastCameras(hostCamerasRef.current, spotlightRef.current);
-          setTimeout(() => broadcastCameras(hostCamerasRef.current, spotlightRef.current), 1500);
-        }
-      });
-      room.on(RoomEvent.ParticipantDisconnected, sync);
-      room.on(RoomEvent.TrackPublished, sync);
-      room.on(RoomEvent.TrackSubscribed, sync);
-      room.on(RoomEvent.TrackUnsubscribed, sync);
-      room.on(RoomEvent.TrackMuted, sync);
-      room.on(RoomEvent.TrackUnmuted, sync);
-      room.on(RoomEvent.LocalTrackPublished, sync);
-      room.on(RoomEvent.LocalTrackUnpublished, sync);
-      room.on(RoomEvent.ActiveSpeakersChanged, () => setSpeakers(room.activeSpeakers.map((s) => s.identity)));
-      room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
-        if (topic !== TOPIC || !participant || payload.length > 4096) return;
-        handleDataMessage(payload, participant);
-      });
-      room.on(RoomEvent.AudioPlaybackStatusChanged, (playing) => setAudioBlocked(!playing));
-
-      await room.connect(credentials.url, credentials.token);
-      roomRef.current = room;
-      localIdentityRef.current = room.localParticipant.identity;
-      setAudioBlocked(!room.canPlaybackAudio);
-      await room.localParticipant.setMicrophoneEnabled(micOn, micOptions());
-      if (role === "host") {
-        broadcastCameras(hostCamerasRef.current, spotlightRef.current);
-      } else {
-        if (cameraOn) await room.localParticipant.setCameraEnabled(true, cameraOptions());
-        void room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({ type: "cameras-request" })), {
-          reliable: true,
-          topic: TOPIC,
+    const track = micTrack;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import("@livekit/krisp-noise-filter");
+        if (!isKrispNoiseFilterSupported()) return;
+        const krisp = KrispNoiseFilter({
+          useBVC: preferences.krispModel === "bvc",
+          quality: preferences.krispQuality,
         });
+        await track.setProcessor(krisp);
+        await krisp.setEnabled(true);
+        if (!cancelled) noiseProcessorRef.current = track;
+      } catch (error) {
+        console.error("Falha ao ativar cancelamento de ruído (Krisp)", error);
       }
-      sync();
-      setStatus("live");
-    } catch (error) {
-      console.error(error);
-      setStatus("error");
-    } finally {
-      connectingRef.current = false;
-    }
-  }, [status, channelId, participantName, role, audience, micOn, cameraOn, syncGuests, syncLocal, broadcastCameras]);
+    })();
 
-  const disconnect = useCallback(() => {
-    void roomRef.current?.disconnect();
-    roomRef.current = null;
-    setStatus("idle");
-    setGuests([]);
-    setLocalCameraTracks({});
-    setLocalScreenTrack(null);
-    setSharing(false);
-    setCameraOn(false);
-    setSignals({});
-    hostIdentityRef.current = null;
-    rosterRef.current = [];
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [preferences.noiseCancellation, preferences.krispModel, preferences.krispQuality, voice.status, voice.micOn]);
 
-  useEffect(() => () => void roomRef.current?.disconnect(), []);
-
-  // ---- Data message handling (signals + host camera roster) ----
-  function handleDataMessage(payload: Uint8Array, participant: { identity: string; name?: string }) {
-    let data: DataMessage;
-    try {
-      data = JSON.parse(new TextDecoder().decode(payload)) as DataMessage;
-    } catch {
-      return;
-    }
-    if (data.type === "cameras-request") {
-      if (role === "host") broadcastCameras(hostCamerasRef.current, spotlightRef.current);
-      return;
-    }
-    if (data.type === "cameras") {
-      hostIdentityRef.current = participant.identity;
-      rosterRef.current = data.cameras;
-      spotlightRef.current = data.spotlight;
-      setSpotlightState(data.spotlight);
-      if (roomRef.current) syncGuests(roomRef.current);
-      return;
-    }
-    if (data.type !== "signal") return;
-    const identity = participant.identity;
-    setSignals((current) => ({
-      ...current,
-      [identity]: {
-        ...current[identity],
-        ...(typeof data.hand === "boolean" ? { hand: data.hand } : {}),
-        ...(typeof data.reaction === "string" ? { reaction: data.reaction, expires: Date.now() + 6000 } : {}),
-      },
-    }));
-  }
-
-  // ---- Camera actions (host multi-camera) ----
-  const addCamera = useCallback(
-    async (name: string, deviceId: string) => {
-      const cam: HostCamera = { id: `cam-${crypto.randomUUID().slice(0, 8)}`, name, deviceId, enabled: true };
-      updateCameras([...hostCamerasRef.current, cam]);
-      await publishCamera(cam);
-    },
-    [updateCameras],
-  );
-
-  const removeCamera = useCallback(
-    (id: string) => {
-      unpublishCamera(id);
-      updateCameras(hostCamerasRef.current.filter((c) => c.id !== id));
-      if (spotlightRef.current === id) setSpotlight(null);
-    },
-    [updateCameras],
-  );
-
-  const toggleHostCamera = useCallback(
-    async (id: string) => {
-      const cam = hostCamerasRef.current.find((c) => c.id === id);
-      if (!cam) return;
-      updateCameras(hostCamerasRef.current.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c)));
-      if (cam.enabled) unpublishCamera(id);
-      else await publishCamera({ ...cam, enabled: true });
-    },
-    [updateCameras],
-  );
-
-  const updateCamera = useCallback(
-    async (id: string, patch: { name?: string; deviceId?: string; quality?: CameraQuality }) => {
-      const cam = hostCamerasRef.current.find((c) => c.id === id);
-      if (!cam) return;
-      const updated = { ...cam, ...patch };
-      updateCameras(hostCamerasRef.current.map((c) => (c.id === id ? updated : c)));
-      const captureChanged = (patch.deviceId && patch.deviceId !== cam.deviceId) || (patch.quality && patch.quality !== (cam.quality ?? "720"));
-      if (updated.enabled && captureChanged) {
-        unpublishCamera(id);
-        await publishCamera(updated);
-      }
-    },
-    [updateCameras],
-  );
-
-  const setSpotlight = useCallback(
-    (id: string | null) => {
-      setSpotlightState(id);
-      spotlightRef.current = id;
-      try {
-        if (id) localStorage.setItem(storageKeys.spotlight, id);
-        else localStorage.removeItem(storageKeys.spotlight);
-      } catch {
-        /* ignore */
-      }
-      broadcastCameras(hostCamerasRef.current, id);
-    },
-    [broadcastCameras],
-  );
-
-  // ---- Actions (shared) ----
-  const toggleMic = useCallback(async () => {
-    const next = !micOn;
-    await roomRef.current?.localParticipant.setMicrophoneEnabled(next, micOptions());
-    setMicOn(next);
-  }, [micOn]);
-
-  // Desbloqueia a reprodução de áudio remoto quando o navegador a bloqueia por
-  // política de autoplay. Precisa ser chamado num gesto de usuário (clique).
-  const enableAudio = useCallback(() => {
-    void roomRef.current?.startAudio();
-  }, []);
-
-  const toggleCamera = useCallback(async () => {
-    const next = !cameraOn;
-    const room = roomRef.current;
-    if (room) {
-      await room.localParticipant.setCameraEnabled(next, cameraOptions());
-    }
-    setCameraOn(next);
-  }, [cameraOn]);
-
-  const setShareQuality = useCallback((quality: ShareQuality) => {
-    setPreferences({ shareQuality: quality });
-  }, []);
-
-  const toggleShare = useCallback(async () => {
-    const next = !sharing;
-    const room = roomRef.current;
-    if (room) {
-      const preset = shareQualityPresets[shareQualityRef.current];
-      // Aplicado no próximo compartilhamento: trocar qualidade no meio reabriria o seletor do navegador.
-      room.options.publishDefaults = {
-        ...room.options.publishDefaults,
-        screenShareEncoding: { maxBitrate: preset.maxBitrate, maxFramerate: preset.maxFramerate },
-      };
-      await room.localParticipant.setScreenShareEnabled(next, {
-        audio: true,
-        contentHint: preferencesRef.current.contentHint,
-        resolution: preset.resolution,
-      });
-    }
-    setSharing(next);
-    setLocalScreenTrack((room?.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track as LocalVideoTrack | undefined) ?? null);
-  }, [sharing]);
-
-  const sendSignal = useCallback((data: { hand?: boolean; reaction?: string }) => {
-    const identity = localIdentityRef.current;
-    setSignals((current) => ({
-      ...current,
-      [identity]: {
-        ...current[identity],
-        ...data,
-        ...(data.reaction ? { expires: Date.now() + 6000 } : {}),
-      },
-    }));
-    void roomRef.current?.localParticipant.publishData(
-      new TextEncoder().encode(JSON.stringify({ type: "signal", ...data })),
-      { reliable: true, topic: TOPIC },
-    );
-  }, []);
-
-  const anyCameraOn = role === "host" ? hostCameras.some((c) => c.enabled) : cameraOn;
+  const options = { campaignId, channelId, channelName, participantName, role, audience };
 
   return {
     roomRef,
-    status,
-    guests,
-    hostCameras,
-    localCameraTracks,
-    localScreenTrack,
-    micOn,
-    cameraOn: anyCameraOn,
-    sharing,
-    shareQuality,
-    signals,
-    speakers,
-    spotlight,
-    cameraErrors,
-    localIdentity: localIdentityRef.current,
-    audioBlocked,
-    enableAudio,
-    connect,
-    disconnect,
+    ...voice,
+    shareQuality: preferences.shareQuality,
+    connect: () => void connectRoom(options),
+    disconnect: disconnectRoom,
     toggleMic,
     toggleCamera,
     toggleShare,
@@ -528,5 +107,6 @@ export function useLiveKitRoom({ campaignId, channelId, participantName, role, a
     toggleHostCamera,
     updateCamera,
     setSpotlight,
+    enableAudio,
   };
 }

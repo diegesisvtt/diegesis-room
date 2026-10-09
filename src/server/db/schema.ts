@@ -190,10 +190,19 @@ export const userPreferences = sqliteTable("user_preferences", {
     .default("720"),
   echoCancellation: integer("echo_cancellation", { mode: "boolean" }).notNull().default(true),
   noiseSuppression: integer("noise_suppression", { mode: "boolean" }).notNull().default(true),
+  noiseCancellation: text("noise_cancellation", { enum: ["none", "voice-isolation", "krisp"] })
+    .notNull()
+    .default("none"),
+  krispModel: text("krisp_model", { enum: ["nc", "bvc"] }).notNull().default("nc"),
+  krispQuality: text("krisp_quality", { enum: ["low", "medium", "high"] }).notNull().default("medium"),
   autoGainControl: integer("auto_gain_control", { mode: "boolean" }).notNull().default(true),
   visualEffects: integer("visual_effects", { mode: "boolean" }).notNull().default(true),
+  showOthersRolls: integer("show_others_rolls", { mode: "boolean" }).notNull().default(true),
   stereo: integer("stereo", { mode: "boolean" }).notNull().default(false),
   contentHint: text("content_hint", { enum: ["detail", "text", "motion"] }).notNull().default("detail"),
+  microphoneDeviceId: text("microphone_device_id").notNull().default("default"),
+  cameraDeviceId: text("camera_device_id").notNull().default("default"),
+  speakerDeviceId: text("speaker_device_id").notNull().default("default"),
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),

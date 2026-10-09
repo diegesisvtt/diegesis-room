@@ -5,6 +5,9 @@ import { api } from "./api";
 export type ShareQuality = "720" | "1080" | "1440" | "2160";
 export type CameraQuality = "360" | "540" | "720" | "1080" | "1440" | "2160";
 export type ContentHint = "detail" | "text" | "motion";
+export type NoiseCancellationMode = "none" | "voice-isolation" | "krisp";
+export type KrispModel = "nc" | "bvc";
+export type KrispQuality = "low" | "medium" | "high";
 
 export const shareQualityPresets: Record<
   ShareQuality,
@@ -23,13 +26,27 @@ export type UserPreferences = {
   cameraQuality: CameraQuality;
   echoCancellation: boolean;
   noiseSuppression: boolean;
+  /** Cancelamento de ruído aprimorado: Krisp (IA) ou isolamento de voz experimental. */
+  noiseCancellation: NoiseCancellationMode;
+  /** Modelo do Krisp: NC (ruído de fundo) ou BVC (vozes de fundo). */
+  krispModel: KrispModel;
+  /** Qualidade/uso de CPU do Krisp. */
+  krispQuality: KrispQuality;
   autoGainControl: boolean;
   /** Áudio estéreo (aplicado na próxima ativação do microfone). */
   stereo: boolean;
   /** Dica de conteúdo do compartilhamento de tela. */
   contentHint: ContentHint;
+  /** Microfone preferido (deviceId, "default" = padrão do sistema). */
+  microphoneDeviceId: string;
+  /** Câmera pessoal preferida (deviceId, "default" = padrão do sistema). */
+  cameraDeviceId: string;
+  /** Saída de áudio preferida (deviceId, "default" = padrão do sistema). */
+  speakerDeviceId: string;
   /** Partículas e efeitos visuais de fundo. */
   visualEffects: boolean;
+  /** Anima os dados 3D quando outros participantes rolarem. */
+  showOthersRolls: boolean;
 };
 
 const defaults: UserPreferences = {
@@ -37,10 +54,17 @@ const defaults: UserPreferences = {
   cameraQuality: "720",
   echoCancellation: true,
   noiseSuppression: true,
+  noiseCancellation: "krisp",
+  krispModel: "nc",
+  krispQuality: "medium",
   autoGainControl: true,
   stereo: false,
   contentHint: "detail",
+  microphoneDeviceId: "default",
+  cameraDeviceId: "default",
+  speakerDeviceId: "default",
   visualEffects: true,
+  showOthersRolls: true,
 };
 
 const KEY = "diegesis:preferences";

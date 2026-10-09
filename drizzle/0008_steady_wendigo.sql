@@ -1,0 +1,1 @@
+ALTER TABLE `user_preferences` ADD `show_others_rolls` integer DEFAULT true NOT NULL;

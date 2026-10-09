@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Clapperboard, Headphones, Loader2, Mic, MonitorUp, Palette, Radio, Save, Sparkles, Video, X } from "lucide-react";
+import { AudioLines, Check, CircleCheck, Clapperboard, Dices, Headphones, Loader2, Mic, MonitorUp, Palette, Radio, Save, Sparkles, TriangleAlert, Video, Volume2, X } from "lucide-react";
 import { api, type LiveKitSettings } from "@/web/lib/api";
 import {
   setPreferences,
@@ -9,8 +9,14 @@ import {
   usePreferences,
   type CameraQuality,
   type ContentHint,
+  type KrispModel,
+  type KrispQuality,
+  type NoiseCancellationMode,
   type ShareQuality,
+  type UserPreferences,
 } from "@/web/lib/preferences";
+import { deviceLabel, devicePreferenceKey, devicesOfKind, testSoundOnDevice, useMediaDevices } from "@/web/lib/mediaDevices";
+import { MicrophoneMeter } from "@/web/features/meeting/MicrophoneMeter";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 import { Input } from "@/web/components/ui/input";
@@ -170,11 +176,142 @@ const cameraQualityLabels: Record<CameraQuality, string> = {
   "360": "360p",
 };
 
+const noiseCancellationLabels: Record<NoiseCancellationMode, string> = {
+  none: "Nenhum (padrão WebRTC)",
+  "voice-isolation": "Isolamento de voz (experimental)",
+  krisp: "Krisp (aprimorado)",
+};
+
+const krispModelLabels: Record<KrispModel, string> = {
+  nc: "Redução de ruído de fundo (NC)",
+  bvc: "Cancelamento de voz de fundo (BVC)",
+};
+
+const krispQualityLabels: Record<KrispQuality, string> = {
+  low: "Baixa (máquinas fracas)",
+  medium: "Média",
+  high: "Alta",
+};
+
 const contentHintLabels: Record<ContentHint, string> = {
   detail: "Detalhe (imagens e leitura)",
   text: "Texto (documentos e código)",
   motion: "Movimento (vídeo e animações)",
 };
+
+function DeviceSelectField({
+  kind,
+  label,
+  value,
+  onChange,
+  devices,
+}: {
+  kind: MediaDeviceKind;
+  label: string;
+  value: string;
+  onChange: (id: string) => void;
+  devices: MediaDeviceInfo[];
+}) {
+  const options = devicesOfKind(devices, kind);
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger aria-label={label} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="default">Padrão do sistema</SelectItem>
+          {options.map((d, i) => (
+            <SelectItem key={d.deviceId} value={d.deviceId}>
+              {d.label || `${label} ${i + 1}`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function MediaDevicesSection() {
+  const prefs = usePreferences();
+  const { devices } = useMediaDevices();
+  const [notice, setNotice] = useState<{ tone: "success" | "error" | "testing"; message: string } | null>(null);
+
+  function pick(kind: MediaDeviceKind) {
+    return (id: string) => setPreferences({ [devicePreferenceKey[kind]]: id } as Partial<UserPreferences>);
+  }
+
+  async function testSound() {
+    const deviceId = prefs.speakerDeviceId;
+    const label = deviceLabel(devices, "audiooutput", deviceId, "Saída de áudio");
+    setNotice({ tone: "testing", message: label ? `Testando em ${label}…` : "Testando som…" });
+    try {
+      await testSoundOnDevice(deviceId);
+      setNotice({ tone: "success", message: label ? `Som reproduzido em ${label}.` : "Som reproduzido." });
+    } catch {
+      setNotice({ tone: "error", message: "Não foi possível reproduzir o som de teste." });
+    }
+  }
+
+  return (
+    <motion.div variants={itemVariants} className="mb-5 space-y-3">
+      <div className="card-ornate rounded-xl p-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DeviceSelectField
+            kind="audioinput"
+            label="Microfone"
+            value={prefs.microphoneDeviceId}
+            onChange={pick("audioinput")}
+            devices={devices}
+          />
+          <DeviceSelectField
+            kind="videoinput"
+            label="Câmera"
+            value={prefs.cameraDeviceId}
+            onChange={pick("videoinput")}
+            devices={devices}
+          />
+          <DeviceSelectField
+            kind="audiooutput"
+            label="Saída de áudio"
+            value={prefs.speakerDeviceId}
+            onChange={pick("audiooutput")}
+            devices={devices}
+          />
+        </div>
+      </div>
+
+      <MicrophoneMeter deviceId={prefs.microphoneDeviceId} />
+
+      <div className="flex items-center gap-3">
+        <Button variant="outline-gold" onClick={() => void testSound()}>
+          <Volume2 className="size-4" /> Testar som
+        </Button>
+        <AnimatePresence mode="wait">
+          {notice && (
+            <motion.span
+              key={notice.tone + notice.message}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center gap-2 text-sm"
+            >
+              {notice.tone === "success" ? (
+                <CircleCheck className="size-4 text-success" />
+              ) : notice.tone === "error" ? (
+                <TriangleAlert className="size-4 text-danger" />
+              ) : (
+                <AudioLines className="size-4 animate-pulse text-accent" />
+              )}
+              <span className="text-muted-foreground">{notice.message}</span>
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
 
 function VoiceSection() {
   const prefs = usePreferences();
@@ -185,6 +322,7 @@ function VoiceSection() {
         title="Voz e vídeo"
         description="Preferências de captura e transmissão — sincronizadas com sua conta quando conectado."
       />
+      <MediaDevicesSection />
       <div className="space-y-3">
         <PreferenceRow icon={Mic} title="Cancelamento de eco" description="Reduz o retorno do áudio dos alto-falantes no microfone.">
           <Switch
@@ -200,6 +338,64 @@ function VoiceSection() {
             aria-label="Supressão de ruído"
           />
         </PreferenceRow>
+        <PreferenceRow
+          icon={Mic}
+          title="Cancelamento de ruído aprimorado"
+          description="IA (Krisp) ou isolamento de voz para remover ruído de fundo como ventiladores. Krisp baixa os modelos sob demanda."
+        >
+          <Select value={prefs.noiseCancellation} onValueChange={(v) => setPreferences({ noiseCancellation: v as NoiseCancellationMode })}>
+            <SelectTrigger aria-label="Cancelamento de ruído aprimorado" className="w-60">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(noiseCancellationLabels) as NoiseCancellationMode[]).map((mode) => (
+                <SelectItem key={mode} value={mode}>
+                  {noiseCancellationLabels[mode]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </PreferenceRow>
+        {prefs.noiseCancellation === "krisp" && (
+          <>
+            <PreferenceRow
+              icon={Mic}
+              title="Modelo do Krisp"
+              description="NC remove ruído de fundo (ventilador, trânsito). BVC remove vozes de fundo."
+            >
+              <Select value={prefs.krispModel} onValueChange={(v) => setPreferences({ krispModel: v as KrispModel })}>
+                <SelectTrigger aria-label="Modelo do Krisp" className="w-60">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(krispModelLabels) as KrispModel[]).map((model) => (
+                    <SelectItem key={model} value={model}>
+                      {krispModelLabels[model]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PreferenceRow>
+            <PreferenceRow
+              icon={Mic}
+              title="Qualidade do Krisp"
+              description="Mais qualidade usa mais CPU. Baixa é ideal para máquinas fracas."
+            >
+              <Select value={prefs.krispQuality} onValueChange={(v) => setPreferences({ krispQuality: v as KrispQuality })}>
+                <SelectTrigger aria-label="Qualidade do Krisp" className="w-60">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(krispQualityLabels) as KrispQuality[]).map((quality) => (
+                    <SelectItem key={quality} value={quality}>
+                      {krispQualityLabels[quality]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PreferenceRow>
+          </>
+        )}
         <PreferenceRow icon={Mic} title="Controle automático de ganho" description="Nivela o volume da sua voz automaticamente.">
           <Switch
             checked={prefs.autoGainControl}
@@ -289,6 +485,17 @@ function AppearanceSection() {
             checked={prefs.visualEffects}
             onCheckedChange={(v) => setPreferences({ visualEffects: v })}
             aria-label="Efeitos visuais"
+          />
+        </PreferenceRow>
+        <PreferenceRow
+          icon={Dices}
+          title="Dados 3D dos outros"
+          description="Anima os dados 3D quando outros participantes rolarem. Desative para economizar desempenho."
+        >
+          <Switch
+            checked={prefs.showOthersRolls}
+            onCheckedChange={(v) => setPreferences({ showOthersRolls: v })}
+            aria-label="Dados 3D dos outros"
           />
         </PreferenceRow>
       </div>

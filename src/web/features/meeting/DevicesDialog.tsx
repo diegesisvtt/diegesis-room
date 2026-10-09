@@ -4,6 +4,8 @@ import { AudioLines, CircleCheck, Plus, Settings, Star, Trash2, TriangleAlert, V
 import { motion } from "framer-motion";
 import { MicrophoneMeter } from "./MicrophoneMeter";
 import type { CameraQuality, HostCamera, ShareQuality } from "./useLiveKitRoom";
+import { setPreferences, usePreferences, type UserPreferences } from "@/web/lib/preferences";
+import { deviceLabel, devicePreferenceKey, devicesOfKind, testSoundOnDevice, useMediaDevices } from "@/web/lib/mediaDevices";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/web/components/ui/dialog";
@@ -16,8 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/web/components/ui/select";
-
-type DeviceKind = "audioinput" | "videoinput" | "audiooutput";
 
 type NoticeTone = "success" | "error" | "testing";
 type SoundNotice = { tone: NoticeTone; message: string };
@@ -61,8 +61,8 @@ export function DevicesDialog({
   onUpdateCamera?: (id: string, patch: { name?: string; deviceId?: string; quality?: CameraQuality }) => void;
   onSetSpotlight?: (tile: string | null) => void;
 }) {
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selected, setSelected] = useState<Record<string, string>>({});
+  const prefs = usePreferences();
+  const { devices } = useMediaDevices();
   const [notice, setNotice] = useState<SoundNotice | null>(null);
   const [newName, setNewName] = useState("");
   const [newDevice, setNewDevice] = useState("default");
@@ -71,14 +71,13 @@ export function DevicesDialog({
     if (!open) return;
     if (!navigator.mediaDevices?.enumerateDevices) {
       setNotice({ tone: "error", message: "Dispositivos indisponíveis neste navegador." });
-      return;
     }
-    void navigator.mediaDevices.enumerateDevices().then(setDevices);
   }, [open]);
 
-  const videoDevices = devices.filter((d) => d.kind === "videoinput" && d.deviceId && d.deviceId !== "default");
+  const videoDevices = devicesOfKind(devices, "videoinput");
 
-  async function selectDevice(kind: DeviceKind, id: string) {
+  // A seleção é global (preferências do usuário), então persiste ao trocar de canal.
+  async function selectDevice(kind: MediaDeviceKind, id: string) {
     const room = roomRef.current;
     if (room && id !== "default") {
       try {
@@ -87,31 +86,16 @@ export function DevicesDialog({
         setNotice({ tone: "error", message: "Não foi possível alternar o dispositivo." });
       }
     }
-    setSelected((current) => ({ ...current, [kind]: id }));
+    setPreferences({ [devicePreferenceKey[kind]]: id } as Partial<UserPreferences>);
   }
 
   async function testSound() {
-    const deviceId = selected.audiooutput;
-    const deviceLabel =
-      deviceId && deviceId !== "default"
-        ? devices.find((d) => d.kind === "audiooutput" && d.deviceId === deviceId)?.label
-        : undefined;
-    setNotice({ tone: "testing", message: deviceLabel ? `Testando em ${deviceLabel}…` : "Testando som…" });
+    const deviceId = prefs.speakerDeviceId;
+    const label = deviceLabel(devices, "audiooutput", deviceId, "Saída de áudio");
+    setNotice({ tone: "testing", message: label ? `Testando em ${label}…` : "Testando som…" });
     try {
-      const audio = new AudioContext();
-      await audio.resume();
-      if (deviceId && deviceId !== "default" && "setSinkId" in audio) {
-        await (audio as AudioContext & { setSinkId(id: string): Promise<void> }).setSinkId(deviceId);
-      }
-      const oscillator = audio.createOscillator();
-      const gain = audio.createGain();
-      gain.gain.value = 0.15;
-      oscillator.connect(gain).connect(audio.destination);
-      oscillator.start();
-      oscillator.stop(audio.currentTime + 0.3);
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      await audio.close();
-      setNotice({ tone: "success", message: deviceLabel ? `Som reproduzido em ${deviceLabel}.` : "Som reproduzido." });
+      await testSoundOnDevice(deviceId);
+      setNotice({ tone: "success", message: label ? `Som reproduzido em ${label}.` : "Som reproduzido." });
     } catch {
       setNotice({ tone: "error", message: "Não foi possível reproduzir o som de teste." });
     }
@@ -241,7 +225,7 @@ export function DevicesDialog({
             kind="videoinput"
             label="Câmera"
             devices={devices}
-            value={selected.videoinput || "default"}
+            value={prefs.cameraDeviceId}
             onSelect={(id) => void selectDevice("videoinput", id)}
           />
         )}
@@ -269,16 +253,16 @@ export function DevicesDialog({
             kind="audioinput"
             label="Microfone"
             devices={devices}
-            value={selected.audioinput || "default"}
+            value={prefs.microphoneDeviceId}
             onSelect={(id) => void selectDevice("audioinput", id)}
           />
-          <MicrophoneMeter deviceId={selected.audioinput || "default"} />
+          <MicrophoneMeter deviceId={prefs.microphoneDeviceId} />
         </div>
         <DeviceSelect
           kind="audiooutput"
           label="Saída de áudio"
           devices={devices}
-          value={selected.audiooutput || "default"}
+          value={prefs.speakerDeviceId}
           onSelect={(id) => void selectDevice("audiooutput", id)}
         />
 
@@ -321,12 +305,13 @@ function DeviceSelect({
   value,
   onSelect,
 }: {
-  kind: DeviceKind;
+  kind: MediaDeviceKind;
   label: string;
   devices: MediaDeviceInfo[];
   value: string;
   onSelect: (id: string) => void;
 }) {
+  const options = devicesOfKind(devices, kind);
   return (
     <div className="space-y-2">
       <label className="font-display text-sm font-semibold tracking-wide text-accent">{label}</label>
@@ -336,13 +321,11 @@ function DeviceSelect({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="default">Padrão do sistema</SelectItem>
-          {devices
-            .filter((d) => d.kind === kind && d.deviceId && d.deviceId !== "default")
-            .map((device, i) => (
-              <SelectItem key={device.deviceId} value={device.deviceId}>
-                {device.label || `${label} ${i + 1}`}
-              </SelectItem>
-            ))}
+          {options.map((device, i) => (
+            <SelectItem key={device.deviceId} value={device.deviceId}>
+              {device.label || `${label} ${i + 1}`}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>

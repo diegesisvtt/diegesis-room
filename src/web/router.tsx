@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Outlet } from "react-router-dom";
 import { Dices } from "lucide-react";
 import { LandingPage } from "@/web/features/landing/LandingPage";
 import { JoinPage } from "@/web/features/join/JoinPage";
@@ -11,26 +11,45 @@ import { MembersPage } from "@/web/features/campaign/MembersPage";
 import { StreamPage } from "@/web/features/tv-mode/StreamPage";
 import { SettingsPage } from "@/web/features/settings/SettingsPage";
 import { PageTransition } from "@/web/components/PageTransition";
+import { VoiceAudio } from "@/web/features/meeting/VoiceAudio";
+import { FloatingVoiceDock } from "@/web/features/meeting/VoiceDock";
 
 export const router = createBrowserRouter([
-  { path: "/", element: <PageTransition><LandingPage /></PageTransition> },
-  { path: "/login", element: <PageTransition><AuthPage mode="login" /></PageTransition> },
-  { path: "/register", element: <PageTransition><AuthPage mode="register" /></PageTransition> },
-  { path: "/change-password", element: <PageTransition><ChangePasswordPage /></PageTransition> },
-  { path: "/join/:token", element: <PageTransition><JoinPage /></PageTransition> },
   {
-    path: "/campaign/:campaignId",
-    element: <CampaignPage />,
+    element: <AppShell />,
     children: [
-      { index: true, element: <CampaignWelcome /> },
-      { path: "settings", element: <CampaignSettingsPage /> },
-      { path: "members", element: <MembersPage /> },
-      { path: "channel/:channelId/*", element: <ChannelView /> },
+      { path: "/", element: <PageTransition><LandingPage /></PageTransition> },
+      { path: "/login", element: <PageTransition><AuthPage mode="login" /></PageTransition> },
+      { path: "/register", element: <PageTransition><AuthPage mode="register" /></PageTransition> },
+      { path: "/change-password", element: <PageTransition><ChangePasswordPage /></PageTransition> },
+      { path: "/join/:token", element: <PageTransition><JoinPage /></PageTransition> },
+      {
+        path: "/campaign/:campaignId",
+        element: <CampaignPage />,
+        children: [
+          { index: true, element: <CampaignWelcome /> },
+          { path: "settings", element: <CampaignSettingsPage /> },
+          { path: "members", element: <MembersPage /> },
+          { path: "channel/:channelId/*", element: <ChannelView /> },
+        ],
+      },
+      { path: "/stream/:channelId", element: <StreamPage /> },
+      { path: "/settings", element: <PageTransition><SettingsPage /></PageTransition> },
     ],
   },
-  { path: "/stream/:channelId", element: <StreamPage /> },
-  { path: "/settings", element: <PageTransition><SettingsPage /></PageTransition> },
 ]);
+
+function AppShell() {
+  return (
+    <>
+      <Outlet />
+      {/* Áudio remoto persiste fora do palco (qualquer rota). */}
+      <VoiceAudio />
+      {/* Dock flutuante para telas sem sidebar (ex.: /settings). */}
+      <FloatingVoiceDock />
+    </>
+  );
+}
 
 function CampaignWelcome() {
   return (
