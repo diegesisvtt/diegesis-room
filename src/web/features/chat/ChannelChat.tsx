@@ -10,6 +10,9 @@ import { fileToImageDataUrl } from "@/web/lib/image";
 import { cn, formatTime, initials } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 
+// Rolagens mais velhas que isso são consideradas históricas: nunca animam.
+const RECENT_ROLL_WINDOW_MS = 30_000;
+
 export function ChannelChat({ channelId }: { channelId: string }) {
   const session = loadSession();
   const authorName = session ? displayName(session) : "Anônimo";
@@ -35,7 +38,11 @@ export function ChannelChat({ channelId }: { channelId: string }) {
     lastIdRef.current = null;
 
     function append(message: Message) {
-      lastIdRef.current = message.id;
+      // O cursor só avança: mensagens fora de ordem (ex.: reenvio do watcher
+      // durante uma reconexão) não podem mover lastIdRef para trás.
+      if (lastIdRef.current === null || message.id > lastIdRef.current) {
+        lastIdRef.current = message.id;
+      }
       setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
     }
 
@@ -53,9 +60,14 @@ export function ChannelChat({ channelId }: { channelId: string }) {
         if (data.type === "history" && data.messages) {
           for (const message of data.messages) append(message);
         } else if (data.type === "message" && data.message) {
+          // Só anima rolagens realmente novas (id à frente do cursor) e
+          // recentes: reenvios do histórico em reconexões não reanimam dados.
+          const isFresh = lastIdRef.current === null || data.message.id > lastIdRef.current;
+          const ageMs = Date.now() - new Date(data.message.createdAt).getTime();
           append(data.message);
-          // Rola os dados 3D das rolagens de outros participantes (se habilitado).
           if (
+            isFresh &&
+            ageMs < RECENT_ROLL_WINDOW_MS &&
             data.message.kind === "roll" &&
             data.message.authorName !== authorName &&
             getPreferences().showOthersRolls

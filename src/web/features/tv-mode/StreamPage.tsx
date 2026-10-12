@@ -11,6 +11,9 @@ import { Button } from "@/web/components/ui/button";
 
 type StreamStatus = "connecting" | "live" | "error";
 
+// Rolagens mais velhas que isso são consideradas históricas: nunca animam.
+const RECENT_ROLL_WINDOW_MS = 30_000;
+
 type StreamGuest = {
   identity: string;
   name: string;
@@ -212,8 +215,12 @@ export function StreamPage() {
         } catch {
           return;
         }
+        // Ignora rolagens antigas reenviadas em reconexões (só anima as recentes).
         if (data.type === "message" && data.message?.kind === "roll") {
-          void animateRoll(parseRollPayload(data.message.rollJson));
+          const ageMs = Date.now() - new Date(data.message.createdAt).getTime();
+          if (ageMs < RECENT_ROLL_WINDOW_MS) {
+            void animateRoll(parseRollPayload(data.message.rollJson));
+          }
         }
       };
       ws.onclose = () => {
