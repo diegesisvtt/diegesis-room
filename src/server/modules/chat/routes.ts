@@ -97,7 +97,9 @@ function unsubscribe(channelId: string, ws: Socket) {
   set.delete(ws);
   if (set.size === 0) {
     subscribers.delete(channelId);
-    lastDelivered.delete(channelId);
+    // Mantém o cursor em lastDelivered: sem ele, o watcher recomeçaria do
+    // início do histórico e reenviaria mensagens antigas como novas quando o
+    // próximo cliente conectar.
   }
 }
 
@@ -127,12 +129,26 @@ function deliver(channelId: string, rows: MessageRow[]) {
 const WATCH_INTERVAL_MS = 1000;
 setInterval(() => {
   for (const channelId of subscribers.keys()) {
-    const since = lastDelivered.get(channelId) ?? "";
+    const since = lastDelivered.get(channelId);
+    // Sem cursor ainda (ex.: reconexão em andamento), o histórico enviado no
+    // open() já cobre o gap — varrer do início reenviaria o histórico inteiro
+    // como mensagens novas (reanimando rolagens antigas nos clientes).
+    if (since === undefined) continue;
     void listMessagesAfter(channelId, since)
       .then((rows) => deliver(channelId, rows))
       .catch(() => {});
   }
 }, WATCH_INTERVAL_MS);
+
+// Heartbeat: mantém sockets ociosos vivos (o Bun fecha conexões sem tráfego
+// após ~120s e proxies costumam cortar ainda antes). Os clientes ignoram
+// frames de tipo desconhecido.
+const HEARTBEAT_INTERVAL_MS = 25_000;
+setInterval(() => {
+  for (const channelId of subscribers.keys()) {
+    broadcast(channelId, JSON.stringify({ type: "ping" }));
+  }
+}, HEARTBEAT_INTERVAL_MS);
 
 const authorizedSockets = new WeakSet<object>();
 // Audiência (modo streaming): recebe mensagens, mas não pode enviar.
@@ -184,20 +200,24 @@ export const chatWs = new Elysia().ws("/ws/channels/:id", {
           set.add(ws.raw);
         }
       }
-      subscribe(channelId, ws.raw);
       // On reconnect the client passes ?since=<lastMessageId> to fill only the gap.
       const since = ws.data.query.since;
-      const pending = since
+      // Busca o histórico ANTES de assinar o canal: assim o cursor já está no
+      // lugar quando o socket entra em subscribers, e o watcher nunca enxerga
+      // um canal assinado sem cursor (o que recomeçaria a varredura do zero).
+      const history = await (since
         ? listMessagesAfter(channelId, since)
-        : listMessages(channelId, 50);
-      void pending.then((history) => {
-        ws.send(JSON.stringify({ type: "history", messages: history }));
-        const last = history[history.length - 1];
-        if (last) {
-          const current = lastDelivered.get(channelId);
-          if (!current || current < last.id) lastDelivered.set(channelId, last.id);
-        }
-      });
+        : listMessages(channelId, 50));
+      // O cliente pode ter desconectado durante a busca do histórico.
+      if (ws.raw.readyState !== 1) return;
+      subscribe(channelId, ws.raw);
+      ws.send(JSON.stringify({ type: "history", messages: history }));
+      // Gap vazio: o próprio `since` do cliente já é a marca d'água do canal.
+      const cursor = history[history.length - 1]?.id ?? since;
+      if (cursor) {
+        const current = lastDelivered.get(channelId);
+        if (!current || current < cursor) lastDelivered.set(channelId, cursor);
+      }
     })();
   },
   close(ws) {
