@@ -77,7 +77,7 @@ export function VoiceDock() {
           variant="ghost"
           size="icon"
           className={cn(
-            "size-8 rounded-full",
+            "size-11 rounded-full sm:size-8",
             !voice.micOn && "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground",
           )}
           aria-label={voice.micOn ? "Desligar microfone" : "Ligar microfone"}
@@ -89,7 +89,7 @@ export function VoiceDock() {
           <Button
             variant="ghost"
             size="icon"
-            className={cn("size-8 rounded-full", voice.cameraOn && "bg-accent text-accent-foreground hover:bg-accent/90")}
+            className={cn("size-10 rounded-full sm:size-8", voice.cameraOn && "bg-accent text-accent-foreground hover:bg-accent/90")}
             aria-label={voice.cameraOn ? "Desligar câmera" : "Ligar câmera"}
             onClick={() => void toggleCamera()}
           >
@@ -99,7 +99,7 @@ export function VoiceDock() {
         <Button
           variant="ghost"
           size="icon"
-          className="size-8 rounded-full text-danger hover:bg-danger/15 hover:text-danger"
+          className="size-10 rounded-full text-danger hover:bg-danger/15 hover:text-danger sm:size-8"
           aria-label="Sair da sala de voz"
           onClick={leave}
         >
@@ -135,7 +135,7 @@ export function FloatingVoiceDock() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-full border border-accent/30 bg-card/90 py-2 pl-3 pr-2 shadow-[var(--shadow-card)] backdrop-blur-md">
+    <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-50 flex items-center gap-2 rounded-full border border-accent/30 bg-card/90 py-2 pl-3 pr-2 shadow-[var(--shadow-card)] backdrop-blur-md">
       <button type="button" onClick={open} className="flex items-center gap-2">
         <span className="relative flex size-8 items-center justify-center rounded-full bg-accent/15">
           <Hash className="size-4 text-accent" />
@@ -152,7 +152,7 @@ export function FloatingVoiceDock() {
           variant="ghost"
           size="icon"
           className={cn(
-            "size-8 rounded-full",
+            "size-11 rounded-full sm:size-8",
             !voice.micOn && "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground",
           )}
           aria-label={voice.micOn ? "Desligar microfone" : "Ligar microfone"}
@@ -163,7 +163,7 @@ export function FloatingVoiceDock() {
         <Button
           variant="ghost"
           size="icon"
-          className="size-8 rounded-full text-danger hover:bg-danger/15 hover:text-danger"
+          className="size-11 rounded-full text-danger hover:bg-danger/15 hover:text-danger sm:size-8"
           aria-label="Sair da sala de voz"
           onClick={leave}
         >

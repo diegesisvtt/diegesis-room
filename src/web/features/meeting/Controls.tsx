@@ -59,13 +59,15 @@ export function Controls({
 }) {
   const live = status === "live";
   const connecting = status === "connecting";
+  const canShareScreen =
+    typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia === "function";
 
   return (
     <motion.footer
       initial={{ y: 40, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: "spring", stiffness: 260, damping: 26 }}
-      className="mx-3 mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border border-accent/20 bg-card/80 px-3 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-md"
+      className="mx-3 mb-[max(0.75rem,env(safe-area-inset-bottom))] flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-accent/20 bg-card/80 px-3 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-md sm:justify-between"
     >
       <div className="hidden min-w-0 xl:block">
         <p className="font-display text-xs font-semibold tracking-wide text-glow">{statusText}</p>
@@ -83,9 +85,11 @@ export function Controls({
         <IconControl label={cameraOn ? "Desligar câmeras" : "Ligar câmeras"} active={cameraOn} onClick={onCamera}>
           {cameraOn ? <Camera /> : <CameraOff />}
         </IconControl>
-        <IconControl label={sharing ? "Parar compartilhamento" : "Compartilhar tela"} active={sharing} onClick={onShare}>
-          <MonitorUp />
-        </IconControl>
+        {canShareScreen && (
+          <IconControl label={sharing ? "Parar compartilhamento" : "Compartilhar tela"} active={sharing} onClick={onShare}>
+            <MonitorUp />
+          </IconControl>
+        )}
         <IconControl label="Participantes" onClick={onOpenParticipants}>
           <Users />
         </IconControl>
@@ -97,7 +101,7 @@ export function Controls({
             <Button
               variant="ghost"
               size="icon"
-              className="size-8 rounded-full sm:size-9"
+              className="size-11 rounded-full sm:size-9"
               aria-label="Reações"
               title="Reações"
             >
@@ -115,7 +119,7 @@ export function Controls({
                   transition={{ type: "spring", stiffness: 500, damping: 18 }}
                   aria-label={r.label}
                   onClick={() => onReaction(r.emoji)}
-                  className="flex size-9 items-center justify-center rounded-full text-xl transition-transform duration-150 hover:scale-125 hover:bg-secondary"
+                  className="flex size-11 items-center justify-center rounded-full text-xl transition-transform duration-150 hover:scale-125 hover:bg-secondary sm:size-9"
                 >
                   {r.emoji}
                 </motion.button>
@@ -170,7 +174,7 @@ function IconControl({
           aria-label={label}
           onClick={onClick}
           className={cn(
-            "size-8 shrink-0 rounded-full sm:size-9",
+            "size-11 shrink-0 rounded-full sm:size-9",
             tone === "danger" &&
               "bg-destructive text-destructive-foreground shadow-[0_0_14px_rgba(239,68,68,0.35)] hover:bg-destructive/90 hover:text-destructive-foreground",
             tone === "gold" && "animate-glow-pulse bg-accent text-accent-foreground hover:bg-gold-bright hover:text-accent-foreground",

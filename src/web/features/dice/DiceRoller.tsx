@@ -48,7 +48,7 @@ export function DiceRoller({
         <Button
           size="icon"
           variant="ghost"
-          className="group size-8 shrink-0 hover:text-accent"
+          className="group size-11 shrink-0 hover:text-accent sm:size-8"
           aria-label="Rolar dados"
           title="Rolar dados"
           disabled={rolling}
@@ -100,14 +100,16 @@ export function DiceRoller({
               <button
                 key={sides}
                 type="button"
-                title={`Adicionar d${sides} (clique direito remove)`}
+                title={`Adicionar d${sides} (clique direito ou toque longo remove)`}
                 onClick={() => addDie(sides, 1)}
                 onContextMenu={(e) => {
+                  // Cobre clique direito no desktop e toque longo no mobile
+                  // (iOS/Android disparam contextmenu nativamente).
                   e.preventDefault();
                   addDie(sides, -1);
                 }}
                 className={cn(
-                  "relative flex h-10 items-center justify-center rounded-md border font-mono text-xs font-medium transition-all duration-200 active:scale-95",
+                  "relative flex h-11 items-center justify-center rounded-md border font-mono text-xs font-medium transition-all duration-200 active:scale-95",
                   count > 0
                     ? "border-accent/70 bg-accent/15 text-gold-bright shadow-[var(--shadow-glow-gold)]"
                     : "border-accent/25 bg-muted/40 text-accent/80 hover:-translate-y-0.5 hover:border-accent/60 hover:bg-accent/10 hover:text-accent hover:shadow-[var(--shadow-glow-gold)]",
@@ -143,7 +145,7 @@ export function DiceRoller({
             <Button
               size="icon"
               variant="outline-gold"
-              className="size-7"
+              className="size-9 sm:size-7"
               aria-label="Diminuir modificador"
               onClick={() => setModifier((m) => m - 1)}
             >
@@ -159,7 +161,7 @@ export function DiceRoller({
             <Button
               size="icon"
               variant="outline-gold"
-              className="size-7"
+              className="size-9 sm:size-7"
               aria-label="Aumentar modificador"
               onClick={() => setModifier((m) => m + 1)}
             >
@@ -193,7 +195,7 @@ export function DiceRoller({
         </div>
 
         <p className="mt-2 text-center text-[10px] text-muted-foreground/70">
-          Clique para adicionar · clique direito remove
+          Toque para adicionar · toque longo remove
         </p>
       </PopoverContent>
     </Popover>

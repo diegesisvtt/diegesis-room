@@ -165,7 +165,7 @@ export function ChannelChat({ channelId }: { channelId: string }) {
       <div ref={scrollRef} className="no-scrollbar relative flex-1 space-y-2.5 overflow-y-auto p-4">
         <MessageList messages={messages} currentAuthor={authorName} />
       </div>
-      <div className="border-t border-accent/15 bg-card/60 p-3 backdrop-blur-sm">
+      <div className="safe-bottom border-t border-accent/15 bg-card/60 p-3 backdrop-blur-sm">
         {!connected && (
           <p className="mb-1 flex items-center gap-1 text-[11px] text-warning">
             <WifiOff className="size-3" /> Reconectando…
@@ -212,7 +212,7 @@ export function ChannelChat({ channelId }: { channelId: string }) {
             <Button
               size="icon"
               variant="ghost"
-              className="group size-8 shrink-0 hover:text-accent"
+              className="group size-11 shrink-0 hover:text-accent sm:size-8"
               aria-label="Anexar imagem"
               title="Anexar imagem"
               disabled={rolling || preparingImage}
@@ -240,7 +240,7 @@ export function ChannelChat({ channelId }: { channelId: string }) {
             <Button
               size="icon"
               variant="gold"
-              className="size-8 shrink-0"
+              className="size-11 shrink-0 sm:size-8"
               onClick={send}
               aria-label="Enviar"
               disabled={rolling}
@@ -249,8 +249,11 @@ export function ChannelChat({ channelId }: { channelId: string }) {
             </Button>
           </div>
         </div>
-        <p className="mt-1.5 text-[10px] text-muted-foreground">
+        <p className="mt-1.5 hidden text-[10px] text-muted-foreground sm:block">
           Enter para enviar · Shift+Enter para nova linha · /r ou /roll para rolar (ex.: /roll 2d6+3)
+        </p>
+        <p className="mt-1.5 text-[10px] text-muted-foreground sm:hidden">
+          /r ou /roll para rolar (ex.: /roll 2d6+3)
         </p>
       </div>
     </div>

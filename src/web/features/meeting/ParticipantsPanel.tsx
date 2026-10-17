@@ -116,8 +116,8 @@ function IconControl({
       size="icon"
       className={
         danger
-          ? "size-8 shrink-0 rounded-full hover:text-danger hover:shadow-[0_0_12px_rgba(239,68,68,0.35)]"
-          : "size-8 shrink-0 rounded-full hover:text-accent hover:shadow-[var(--shadow-glow-gold)]"
+          ? "size-10 shrink-0 rounded-full hover:text-danger hover:shadow-[0_0_12px_rgba(239,68,68,0.35)] sm:size-8"
+          : "size-10 shrink-0 rounded-full hover:text-accent hover:shadow-[var(--shadow-glow-gold)] sm:size-8"
       }
       aria-label={label}
       onClick={onClick}
