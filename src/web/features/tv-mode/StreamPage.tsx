@@ -260,7 +260,7 @@ export function StreamPage() {
             <StreamVideoTile guest={featured} label={streamLabel(featured, streamDisplayMode)} />
           </motion.div>
           {others.length > 0 && (
-            <aside className="flex w-40 shrink-0 flex-col gap-2 overflow-y-auto lg:w-56">
+            <aside className="flex w-28 shrink-0 flex-col gap-2 overflow-y-auto sm:w-40 lg:w-56">
               {others.map((guest) => (
                 <motion.div key={guest.identity} variants={tileVariants} className="aspect-video shrink-0">
                   <StreamVideoTile guest={guest} label={streamLabel(guest, streamDisplayMode)} />
@@ -289,10 +289,10 @@ export function StreamPage() {
 }
 
 function gridClass(count: number) {
-  if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "grid-cols-2";
-  if (count <= 4) return "grid-cols-2 grid-rows-2";
-  return "grid-cols-3";
+  if (count <= 1) return "grid-cols-1 auto-rows-fr";
+  if (count === 2) return "grid-cols-1 auto-rows-fr sm:grid-cols-2";
+  if (count <= 4) return "grid-cols-1 auto-rows-fr sm:grid-cols-2";
+  return "grid-cols-2 auto-rows-fr sm:grid-cols-3";
 }
 
 function StreamVideoTile({ guest, label }: { guest: StreamGuest; label: string }) {

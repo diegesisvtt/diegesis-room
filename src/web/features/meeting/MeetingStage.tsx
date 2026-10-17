@@ -4,7 +4,6 @@ import { LayoutGroup, motion } from "framer-motion";
 import { Expand, Focus, LayoutGrid } from "lucide-react";
 import type { HostCamera, RoomStatus, RemoteGuest, Signal } from "./useLiveKitRoom";
 import { VideoTile, type Tile } from "./VideoTile";
-import { ParticipantContextMenu } from "./ParticipantContextMenu";
 import { cn } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 
@@ -212,65 +211,63 @@ export function MeetingStage({
         <div
           className={cn(
             "relative z-10 min-h-0 flex-1 gap-3 overflow-auto p-3 pt-1",
-            layout === "gallery" ? "grid grid-cols-1 auto-rows-fr sm:grid-cols-2" : "flex",
+            layout === "gallery" ? "grid grid-cols-1 auto-rows-fr sm:grid-cols-2 xl:grid-cols-3" : "flex max-lg:flex-col",
           )}
         >
           {layout === "gallery" ? (
             tiles.map((tile) => (
-              <ParticipantContextMenu key={tile.identity} {...menuFor(tile)}>
-                <motion.div layout transition={tileTransition} className="flex min-h-0">
-                  <VideoTile
-                    tile={tile}
-                    signal={signalFor(tile)}
-                    speaking={speakingFor(tile)}
-                    pinned={pinned === tile.identity}
-                    onPin={() => pin(tile)}
-                    onExpand={() => void fullscreen()}
-                    large
-                  />
-                </motion.div>
-              </ParticipantContextMenu>
+              <motion.div key={tile.identity} layout transition={tileTransition} className="flex min-h-0">
+                <VideoTile
+                  tile={tile}
+                  signal={signalFor(tile)}
+                  speaking={speakingFor(tile)}
+                  pinned={pinned === tile.identity}
+                  onPin={() => pin(tile)}
+                  onExpand={() => void fullscreen()}
+                  menu={menuFor(tile)}
+                  large
+                />
+              </motion.div>
             ))
           ) : (
             <>
               {focused && (
-                <ParticipantContextMenu key={focused.identity} {...menuFor(focused)}>
-                  <motion.div
-                    layoutId={focused.identity}
-                    transition={tileTransition}
-                    className="flex min-h-0 min-w-0 flex-1"
-                  >
-                    <VideoTile
-                      tile={focused}
-                      signal={signalFor(focused)}
-                      speaking={speakingFor(focused)}
-                      pinned
-                      onPin={() => pin(null)}
-                      onExpand={() => void fullscreen()}
-                      large
-                    />
-                  </motion.div>
-                </ParticipantContextMenu>
+                <motion.div
+                  key={focused.identity}
+                  layoutId={focused.identity}
+                  transition={tileTransition}
+                  className="flex min-h-0 min-w-0 flex-1"
+                >
+                  <VideoTile
+                    tile={focused}
+                    signal={signalFor(focused)}
+                    speaking={speakingFor(focused)}
+                    pinned
+                    onPin={() => pin(null)}
+                    onExpand={() => void fullscreen()}
+                    menu={menuFor(focused)}
+                    large
+                  />
+                </motion.div>
               )}
               <aside
-                className="flex w-24 shrink-0 flex-col gap-2 overflow-y-auto sm:w-36 lg:w-44"
+                className="flex shrink-0 gap-2 max-lg:w-full max-lg:flex-row max-lg:overflow-x-auto max-lg:overflow-y-hidden lg:w-36 lg:flex-col lg:overflow-y-auto xl:w-44"
                 aria-label="Vídeos dos participantes"
               >
                 {tiles
                   .filter((t) => t.identity !== focused?.identity)
                   .map((tile) => (
-                    <ParticipantContextMenu key={tile.identity} {...menuFor(tile)}>
-                      <motion.div layoutId={tile.identity} transition={tileTransition} className="shrink-0">
-                        <VideoTile
-                          tile={tile}
-                          signal={signalFor(tile)}
-                          speaking={speakingFor(tile)}
-                          pinned={false}
-                          onPin={() => pin(tile)}
-                          onExpand={() => void fullscreen()}
-                        />
-                      </motion.div>
-                    </ParticipantContextMenu>
+                    <motion.div key={tile.identity} layoutId={tile.identity} transition={tileTransition} className="shrink-0 max-lg:w-36">
+                      <VideoTile
+                        tile={tile}
+                        signal={signalFor(tile)}
+                        speaking={speakingFor(tile)}
+                        pinned={false}
+                        onPin={() => pin(tile)}
+                        onExpand={() => void fullscreen()}
+                        menu={menuFor(tile)}
+                      />
+                    </motion.div>
                   ))}
               </aside>
             </>
