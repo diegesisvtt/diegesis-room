@@ -219,7 +219,7 @@ const STATUS_LABEL: Record<Member["status"], string> = {
 
 function MemberRow({ member, children }: { member: Member; children?: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-background/40 px-3 py-2.5">
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-background/40 px-3 py-2.5">
       <span className="relative shrink-0">
         <Avatar className="size-9">
           {member.photoUrl ? <AvatarImage src={member.photoUrl} alt={member.name} /> : null}
@@ -241,7 +241,7 @@ function MemberRow({ member, children }: { member: Member; children?: React.Reac
         </span>
       </span>
 
-      <span className="flex shrink-0 flex-wrap items-center gap-1.5">
+      <span className="flex shrink-0 flex-wrap items-center gap-1.5 max-sm:order-last max-sm:basis-full">
         <Badge
           className={member.role === "host" ? "border-accent/50 text-accent" : "border-border text-muted-foreground"}
         >

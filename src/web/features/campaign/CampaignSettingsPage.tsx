@@ -188,7 +188,7 @@ function CampaignBackgroundsSection({ campaignId }: { campaignId: string }) {
               type="button"
               onClick={() => void remove(bg.id)}
               aria-label={`Remover ${bg.name}`}
-              className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white/80 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+              className="absolute right-1 top-1 rounded-full bg-black/60 p-1.5 text-white/80 opacity-100 transition-opacity hover:text-danger sm:p-1 sm:opacity-0 sm:group-hover:opacity-100"
             >
               <Trash2 className="size-3.5" />
             </button>

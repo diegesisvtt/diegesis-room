@@ -53,7 +53,7 @@ export function ProfileFields({
           ) : (
             initials(value.name) || "?"
           )}
-          <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 backdrop-blur-[1px] transition-all duration-200 group-hover:opacity-100">
+          <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-100 backdrop-blur-[1px] transition-all duration-200 sm:opacity-0 sm:group-hover:opacity-100">
             {processing ? (
               <Loader2 className="size-5 animate-spin text-gold-bright" />
             ) : (

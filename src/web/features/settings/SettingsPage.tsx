@@ -72,17 +72,17 @@ export function SettingsPage() {
   }, [navigate]);
 
   return (
-    <main className="relative flex h-dvh overflow-hidden bg-background text-foreground">
+    <main className="relative flex h-dvh flex-col overflow-hidden bg-background text-foreground sm:flex-row">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--color-primary)_12%,transparent),transparent_55%)]"
       />
       <div aria-hidden className="map-grid pointer-events-none absolute inset-0 opacity-30" />
 
-      <aside className="relative z-10 flex w-56 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border-gold/40 bg-background/60 px-3 py-6 backdrop-blur-sm">
+      <aside className="safe-top relative z-10 flex shrink-0 gap-2 overflow-x-auto border-b border-border-gold/40 bg-background/60 px-3 py-2 backdrop-blur-sm sm:w-56 sm:flex-col sm:gap-4 sm:overflow-y-auto sm:border-b-0 sm:border-r sm:py-6">
         {sections.map((group) => (
-          <nav key={group.category} className="space-y-1">
-            <p className="font-display px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <nav key={group.category} className="flex gap-1 sm:block sm:space-y-1">
+            <p className="font-display hidden px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground sm:block">
               {group.category}
             </p>
             {group.items.map(({ key, label, icon: Icon }) => (
@@ -90,7 +90,7 @@ export function SettingsPage() {
                 key={key}
                 onClick={() => setSection(key)}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                  "flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors sm:w-full sm:px-2 sm:py-1.5",
                   section === key
                     ? "bg-accent/15 font-medium text-accent shadow-[var(--shadow-glow-gold)]"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -105,7 +105,7 @@ export function SettingsPage() {
       </aside>
 
       <div className="relative z-10 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl px-8 py-10">
+        <div className="mx-auto max-w-2xl px-4 py-6 sm:px-8 sm:py-10">
           <AnimatePresence mode="wait">
             <motion.div
               key={section}
@@ -122,7 +122,7 @@ export function SettingsPage() {
           </AnimatePresence>
         </div>
 
-        <div className="fixed right-6 top-6 flex flex-col items-center gap-1">
+        <div className="fixed right-6 top-[max(1.5rem,env(safe-area-inset-top))] flex flex-col items-center gap-1">
           <button
             onClick={() => navigate(-1)}
             aria-label="Fechar configurações"
@@ -130,7 +130,7 @@ export function SettingsPage() {
           >
             <X className="size-5" />
           </button>
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Esc</span>
+          <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:block">Esc</span>
         </div>
       </div>
     </main>
@@ -158,7 +158,7 @@ function PreferenceRow({
   children: React.ReactNode;
 }) {
   return (
-    <motion.div variants={itemVariants} className="card-ornate flex items-center gap-4 rounded-xl p-4">
+    <motion.div variants={itemVariants} className="card-ornate flex flex-wrap items-center gap-4 rounded-xl p-4">
       <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent/10">
         <Icon className="size-5 text-accent" />
       </div>
@@ -166,7 +166,7 @@ function PreferenceRow({
         <p className="text-sm font-medium">{title}</p>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="shrink-0 max-sm:w-full">{children}</div>
     </motion.div>
   );
 }
@@ -373,7 +373,7 @@ function AdditionalCamerasSection() {
                 <Trash2 className="size-4" />
               </Button>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Select
                 value={cam.deviceId}
                 onValueChange={(id) =>
@@ -398,7 +398,7 @@ function AdditionalCamerasSection() {
                   update(prefs.cameras.map((c) => (c.id === cam.id ? { ...c, quality: q as CameraQuality } : c)))
                 }
               >
-                <SelectTrigger aria-label={`Qualidade de ${cam.name}`} className="w-36 shrink-0">
+                <SelectTrigger aria-label={`Qualidade de ${cam.name}`} className="w-36 shrink-0 max-sm:flex-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -417,7 +417,7 @@ function AdditionalCamerasSection() {
             Nenhuma câmera adicional configurada. Adicione a câmera do mapa, do mestre ou ângulos extras.
           </p>
         )}
-        <motion.div variants={itemVariants} className="flex items-center gap-2">
+        <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2">
           <Input
             placeholder="Nome (ex.: Mapa, Mestre)"
             value={newName}
@@ -427,7 +427,7 @@ function AdditionalCamerasSection() {
             }}
           />
           <Select value={newDevice} onValueChange={setNewDevice}>
-            <SelectTrigger aria-label="Dispositivo da nova câmera" className="w-40 shrink-0">
+            <SelectTrigger aria-label="Dispositivo da nova câmera" className="w-40 shrink-0 max-sm:w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -479,7 +479,7 @@ function VoiceSection() {
           description="IA (Krisp) ou isolamento de voz para remover ruído de fundo como ventiladores. Krisp baixa os modelos sob demanda."
         >
           <Select value={prefs.noiseCancellation} onValueChange={(v) => setPreferences({ noiseCancellation: v as NoiseCancellationMode })}>
-            <SelectTrigger aria-label="Cancelamento de ruído aprimorado" className="w-60">
+            <SelectTrigger aria-label="Cancelamento de ruído aprimorado" className="w-full sm:w-60">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -499,7 +499,7 @@ function VoiceSection() {
               description="NC remove ruído de fundo (ventilador, trânsito). BVC remove vozes de fundo."
             >
               <Select value={prefs.krispModel} onValueChange={(v) => setPreferences({ krispModel: v as KrispModel })}>
-                <SelectTrigger aria-label="Modelo do Krisp" className="w-60">
+                <SelectTrigger aria-label="Modelo do Krisp" className="w-full sm:w-60">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -517,7 +517,7 @@ function VoiceSection() {
               description="Mais qualidade usa mais CPU. Baixa é ideal para máquinas fracas."
             >
               <Select value={prefs.krispQuality} onValueChange={(v) => setPreferences({ krispQuality: v as KrispQuality })}>
-                <SelectTrigger aria-label="Qualidade do Krisp" className="w-60">
+                <SelectTrigger aria-label="Qualidade do Krisp" className="w-full sm:w-60">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -551,7 +551,7 @@ function VoiceSection() {
           description="Resolução da sua câmera ao entrar na mesa. Aplicada na próxima ativação."
         >
           <Select value={prefs.cameraQuality} onValueChange={(q) => setPreferences({ cameraQuality: q as CameraQuality })}>
-            <SelectTrigger aria-label="Qualidade da câmera" className="w-44">
+            <SelectTrigger aria-label="Qualidade da câmera" className="w-full sm:w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -572,7 +572,7 @@ function VoiceSection() {
             value={prefs.segmentationQuality}
             onValueChange={(v) => setPreferences({ segmentationQuality: v as SegmentationQuality })}
           >
-            <SelectTrigger aria-label="Qualidade do fundo virtual" className="w-52">
+            <SelectTrigger aria-label="Qualidade do fundo virtual" className="w-full sm:w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -590,7 +590,7 @@ function VoiceSection() {
           description="Resolução e bitrate da transmissão de tela. Aplicada no próximo compartilhamento."
         >
           <Select value={prefs.shareQuality} onValueChange={(q) => setPreferences({ shareQuality: q as ShareQuality })}>
-            <SelectTrigger aria-label="Qualidade do compartilhamento de tela" className="w-52">
+            <SelectTrigger aria-label="Qualidade do compartilhamento de tela" className="w-full sm:w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -608,7 +608,7 @@ function VoiceSection() {
           description="Otimiza a codificação da tela conforme o que você compartilha. Aplicada no próximo compartilhamento."
         >
           <Select value={prefs.contentHint} onValueChange={(v) => setPreferences({ contentHint: v as ContentHint })}>
-            <SelectTrigger aria-label="Dica de conteúdo" className="w-56">
+            <SelectTrigger aria-label="Dica de conteúdo" className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
