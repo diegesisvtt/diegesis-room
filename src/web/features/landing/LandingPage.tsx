@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, type Variants } from "framer-motion";
-import { Crown, Loader2, LogIn, LogOut, Pencil, Plus, Scroll, Settings, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
+import { Crown, Loader2, LogIn, LogOut, MoreVertical, Pencil, Plus, Scroll, Settings, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
 import { api, type Campaign, type CampaignEntry } from "@/web/lib/api";
 import { clearSession, loadSession, peekProfileToken, saveSession, setProfileToken } from "@/web/lib/session";
 import { setAuthUser, useAuth } from "@/web/features/auth/useAuth";
@@ -21,7 +21,15 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/web/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/web/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/web/components/ConfirmDialog";
+import { cn } from "@/web/lib/utils";
 import { EmberParticles } from "@/web/components/EmberParticles";
 
 const container: Variants = {
@@ -144,7 +152,7 @@ export function LandingPage() {
       <EmberParticles count={22} />
       <div className="vignette pointer-events-none absolute inset-0" />
 
-      <header className="relative z-10 flex items-center justify-between px-6 py-5">
+      <header className="safe-top relative z-10 flex flex-wrap items-center justify-between gap-2 px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex items-center gap-2.5">
           <div className="flex size-8 items-center justify-center rounded-md bg-accent/10 ring-1 ring-accent/40">
             <Crown className="size-4 text-accent" />
@@ -155,8 +163,8 @@ export function LandingPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-accent">
-            <Link to="/settings">
-              <Settings className="size-4" /> Configurações
+            <Link to="/settings" aria-label="Configurações">
+              <Settings className="size-4" /> <span className="hidden sm:inline">Configurações</span>
             </Link>
           </Button>
           {authLoading ? null : user ? (
@@ -164,15 +172,15 @@ export function LandingPage() {
               <span className="hidden text-sm text-muted-foreground sm:inline">
                 Olá, <span className="text-foreground">{user.name}</span>
               </span>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-danger" onClick={() => void logout()}>
-                <LogOut className="size-4" /> Sair
+              <Button variant="ghost" size="sm" aria-label="Sair" className="text-muted-foreground hover:text-danger" onClick={() => void logout()}>
+                <LogOut className="size-4" /> <span className="hidden sm:inline">Sair</span>
               </Button>
             </>
           ) : (
             <>
               <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-accent">
-                <Link to="/login">
-                  <LogIn className="size-4" /> Entrar
+                <Link to="/login" aria-label="Entrar">
+                  <LogIn className="size-4" /> <span className="hidden sm:inline">Entrar</span>
                 </Link>
               </Button>
               <Button asChild variant="outline-gold" size="sm">
@@ -260,42 +268,77 @@ export function LandingPage() {
             </h2>
             <div className="space-y-2">
               {campaigns.map((campaign) => (
-                <ContextMenu key={campaign.id}>
-                  <ContextMenuTrigger asChild>
-                    <button
-                      onClick={() => void enterCampaign(campaign)}
-                      className="flex w-full items-center justify-between rounded-md border border-border bg-background/40 px-4 py-3 text-left transition-all duration-300 hover:translate-x-1 hover:border-accent/40 hover:bg-secondary hover:text-accent"
-                    >
-                      <span className="font-medium">{campaign.name}</span>
-                      <span className="text-xs text-muted-foreground transition-colors group-hover:text-accent/80">
-                        {campaign.myStatus === "pending"
-                          ? "Aguardando aprovação…"
-                          : campaign.myRole === "host" || campaign.isOwner
-                            ? "Entrar como anfitrião →"
-                            : "Entrar como jogador →"}
-                      </span>
-                    </button>
-                  </ContextMenuTrigger>
+                <div key={campaign.id} className="group/row relative">
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <button
+                        onClick={() => void enterCampaign(campaign)}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-2 rounded-md border border-border bg-background/40 px-4 py-3 text-left transition-all duration-300 hover:translate-x-1 hover:border-accent/40 hover:bg-secondary hover:text-accent",
+                          campaign.isOwner && "pr-12",
+                        )}
+                      >
+                        <span className="min-w-0 truncate font-medium">{campaign.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground transition-colors group-hover:text-accent/80">
+                          {campaign.myStatus === "pending"
+                            ? "Aguardando aprovação…"
+                            : campaign.myRole === "host" || campaign.isOwner
+                              ? "Entrar como anfitrião →"
+                              : "Entrar como jogador →"}
+                        </span>
+                      </button>
+                    </ContextMenuTrigger>
+                    {campaign.isOwner && (
+                      <ContextMenuContent className="w-52">
+                        <ContextMenuItem
+                          onSelect={() => {
+                            setRenameName(campaign.name);
+                            setRenameTarget(campaign);
+                          }}
+                        >
+                          <Pencil /> Renomear campanha
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                          onSelect={() => setDeleteTarget(campaign)}
+                          className="text-danger focus:bg-danger/10 focus:text-danger"
+                        >
+                          <Trash2 /> Excluir campanha
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    )}
+                  </ContextMenu>
                   {campaign.isOwner && (
-                    <ContextMenuContent className="w-52">
-                      <ContextMenuItem
-                        onSelect={() => {
-                          setRenameName(campaign.name);
-                          setRenameTarget(campaign);
-                        }}
-                      >
-                        <Pencil /> Renomear campanha
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem
-                        onSelect={() => setDeleteTarget(campaign)}
-                        className="text-danger focus:bg-danger/10 focus:text-danger"
-                      >
-                        <Trash2 /> Excluir campanha
-                      </ContextMenuItem>
-                    </ContextMenuContent>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Ações da campanha ${campaign.name}`}
+                          className="absolute right-2 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/15 hover:text-foreground sm:size-8 sm:opacity-0 sm:group-focus-within/row:opacity-100 sm:group-hover/row:opacity-100"
+                        >
+                          <MoreVertical className="size-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setRenameName(campaign.name);
+                            setRenameTarget(campaign);
+                          }}
+                        >
+                          <Pencil /> Renomear campanha
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={() => setDeleteTarget(campaign)}
+                          className="text-danger focus:bg-danger/10 focus:text-danger"
+                        >
+                          <Trash2 /> Excluir campanha
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
-                </ContextMenu>
+                </div>
               ))}
             </div>
           </motion.section>

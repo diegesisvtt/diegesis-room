@@ -6,6 +6,11 @@ import type { Signal } from "./useLiveKitRoom";
 import { cn, initials } from "@/web/lib/utils";
 import { Button } from "@/web/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/web/components/ui/tooltip";
+import {
+  ParticipantContextMenu,
+  ParticipantDropdownMenu,
+  type ParticipantMenuProps,
+} from "./ParticipantContextMenu";
 
 export type Tile = {
   identity: string;
@@ -37,6 +42,7 @@ export function VideoTile({
   onPin,
   onExpand,
   large,
+  menu,
 }: {
   tile: Tile;
   signal?: Signal;
@@ -45,6 +51,7 @@ export function VideoTile({
   onPin: () => void;
   onExpand?: () => void;
   large?: boolean;
+  menu?: ParticipantMenuProps;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const tileKey = `${tile.identity}:${tile.screen ? "screen" : tile.camera ? "cam" : "avatar"}:${tile.track?.sid ?? "none"}`;
@@ -63,7 +70,7 @@ export function VideoTile({
     };
   }, [tile.track]);
 
-  return (
+  const article = (
     <motion.article
       initial={skipEntrance.current ? false : { opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -126,6 +133,7 @@ export function VideoTile({
             <Expand className="size-4" />
           </IconButton>
         )}
+        {menu && <ParticipantDropdownMenu {...menu} />}
       </div>
 
       <AnimatePresence>
@@ -155,13 +163,16 @@ export function VideoTile({
       </div>
     </motion.article>
   );
+
+  if (!menu) return article;
+  return <ParticipantContextMenu {...menu}>{article}</ParticipantContextMenu>;
 }
 
 function IconButton({ label, children, onClick }: { label: string; children: React.ReactNode; onClick: () => void }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-7 rounded-md hover:text-accent" aria-label={label} onClick={onClick}>
+        <Button variant="ghost" size="icon" className="size-10 rounded-md hover:text-accent sm:size-7" aria-label={label} onClick={onClick}>
           {children}
         </Button>
       </TooltipTrigger>

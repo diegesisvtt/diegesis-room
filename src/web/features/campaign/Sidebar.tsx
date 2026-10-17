@@ -10,6 +10,7 @@ import {
   Link2,
   Loader2,
   LogOut,
+  MoreVertical,
   Pencil,
   Plus,
   Settings,
@@ -65,7 +66,7 @@ const dialogItem: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
 };
 
-export function Sidebar({ context }: { context: CampaignContext }) {
+export function Sidebar({ context, className }: { context: CampaignContext; className?: string }) {
   const { campaign, channels, presence, session, refresh, updateSession } = context;
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -100,7 +101,7 @@ export function Sidebar({ context }: { context: CampaignContext }) {
   }
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-accent/15 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-accent)_7%,var(--color-card)),var(--color-card)_55%,color-mix(in_oklab,var(--color-background)_75%,var(--color-card)))] lg:w-60">
+    <aside className={cn("flex w-64 shrink-0 flex-col border-r border-accent/15 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-accent)_7%,var(--color-card)),var(--color-card)_55%,color-mix(in_oklab,var(--color-background)_75%,var(--color-card)))] lg:w-60", className)}>
       <div className="border-b border-accent/10 px-4 pb-3 pt-3.5">
         <div className="flex items-center gap-3">
           <div className="flex size-9 items-center justify-center rounded-lg bg-primary/20 text-gold-bright shadow-[var(--shadow-glow-violet)] ring-1 ring-accent/30">
@@ -110,7 +111,7 @@ export function Sidebar({ context }: { context: CampaignContext }) {
             <p className="truncate font-display text-sm font-bold tracking-wide text-gold-bright">{campaign.name}</p>
             <p className="text-[11px] text-muted-foreground">Mesa híbrida</p>
           </div>
-          <Button variant="ghost" size="icon" className="size-7 hover:text-gold-bright" onClick={() => navigate(`/campaign/${campaign.id}/settings`)} aria-label="Configurações da campanha">
+          <Button variant="ghost" size="icon" className="size-9 hover:text-gold-bright sm:size-7" onClick={() => navigate(`/campaign/${campaign.id}/settings`)} aria-label="Configurações da campanha">
             <Settings className="size-4" />
           </Button>
         </div>
@@ -333,59 +334,86 @@ function ChannelGroup({
       <div className="mb-1 flex items-center justify-between px-2">
         <span className="font-display text-[11px] font-bold tracking-widest text-gold-dim">{title}</span>
         {canModerate && (
-          <Button variant="ghost" size="icon" className="size-5 hover:text-gold-bright" onClick={onAdd} aria-label="Adicionar canal">
+          <Button variant="ghost" size="icon" className="size-8 hover:text-gold-bright sm:size-5" onClick={onAdd} aria-label="Adicionar canal">
             <Plus className="size-3.5" />
           </Button>
         )}
       </div>
       {channels.map((channel) => (
-        <ContextMenu key={channel.id}>
-          <ContextMenuTrigger asChild disabled={!canModerate}>
-            <NavLink
-              to={`channel/${channel.id}`}
-              className={({ isActive }) =>
-                cn(
-                  "group relative mb-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors duration-200",
-                  isActive ? "text-foreground" : "text-muted-foreground hover:bg-accent/10 hover:text-foreground",
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <motion.span
-                      layoutId="active-channel"
-                      className="absolute inset-0 rounded-md border border-accent/30 bg-accent/15 shadow-[var(--shadow-glow-gold)]"
-                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    />
-                  )}
-                  <Hash
-                    className={cn(
-                      "relative z-10 size-4 shrink-0 transition-all duration-200 group-hover:translate-x-0.5",
-                      isActive && "text-accent",
-                    )}
-                  />
-                  <span className="relative z-10 min-w-0 flex-1 truncate text-left">{channel.name}</span>
-                  <PresenceStack participants={presence[channel.id] ?? []} />
-                </>
-              )}
-            </NavLink>
-          </ContextMenuTrigger>
-          {canModerate && (
-            <ContextMenuContent className="w-48">
-              <ContextMenuItem onSelect={() => onRename(channel)}>
-                <Pencil /> Renomear canal
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem
-                onSelect={() => onDelete(channel)}
-                className="text-danger focus:bg-danger/10 focus:text-danger"
+        <div key={channel.id} className="group/row relative mb-0.5 flex items-center">
+          <ContextMenu>
+            <ContextMenuTrigger asChild disabled={!canModerate}>
+              <NavLink
+                to={`channel/${channel.id}`}
+                className={({ isActive }) =>
+                  cn(
+                    "group relative flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors duration-200",
+                    isActive ? "text-foreground" : "text-muted-foreground hover:bg-accent/10 hover:text-foreground",
+                  )
+                }
               >
-                <Trash2 /> Excluir canal
-              </ContextMenuItem>
-            </ContextMenuContent>
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <motion.span
+                        layoutId="active-channel"
+                        className="absolute inset-0 rounded-md border border-accent/30 bg-accent/15 shadow-[var(--shadow-glow-gold)]"
+                        transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                      />
+                    )}
+                    <Hash
+                      className={cn(
+                        "relative z-10 size-4 shrink-0 transition-all duration-200 group-hover:translate-x-0.5",
+                        isActive && "text-accent",
+                      )}
+                    />
+                    <span className="relative z-10 min-w-0 flex-1 truncate text-left">{channel.name}</span>
+                    <PresenceStack participants={presence[channel.id] ?? []} />
+                  </>
+                )}
+              </NavLink>
+            </ContextMenuTrigger>
+            {canModerate && (
+              <ContextMenuContent className="w-48">
+                <ContextMenuItem onSelect={() => onRename(channel)}>
+                  <Pencil /> Renomear canal
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onSelect={() => onDelete(channel)}
+                  className="text-danger focus:bg-danger/10 focus:text-danger"
+                >
+                  <Trash2 /> Excluir canal
+                </ContextMenuItem>
+              </ContextMenuContent>
+            )}
+          </ContextMenu>
+          {canModerate && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Ações do canal ${channel.name}`}
+                  className="relative z-10 mr-1 flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-accent/15 hover:text-foreground lg:size-6 lg:opacity-0 lg:group-focus-within/row:opacity-100 lg:group-hover/row:opacity-100"
+                >
+                  <MoreVertical className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onSelect={() => onRename(channel)}>
+                  <Pencil /> Renomear canal
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => onDelete(channel)}
+                  className="text-danger focus:bg-danger/10 focus:text-danger"
+                >
+                  <Trash2 /> Excluir canal
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
-        </ContextMenu>
+        </div>
       ))}
       {channels.length === 0 && (
         <p className="px-2 text-[11px] text-muted-foreground/60">Nenhum canal ainda</p>
