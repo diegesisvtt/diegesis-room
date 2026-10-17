@@ -34,7 +34,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "card-ornate fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-6",
+        "card-ornate fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg max-h-[90dvh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl p-4 sm:p-6",
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-90 data-[state=open]:slide-in-from-top-4 data-[state=open]:duration-300 data-[state=open]:ease-out",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:duration-200",
         className,
@@ -47,7 +47,7 @@ const DialogContent = React.forwardRef<
       <span aria-hidden className="pointer-events-none absolute bottom-2 left-2 size-3 border-b border-l border-accent/40" />
       <span aria-hidden className="pointer-events-none absolute bottom-2 right-2 size-3 border-b border-r border-accent/40" />
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-1 opacity-60 transition-all duration-200 hover:opacity-100 hover:bg-secondary hover:rotate-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none">
+      <DialogPrimitive.Close className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full opacity-60 transition-all duration-200 hover:opacity-100 hover:bg-secondary hover:rotate-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none">
         <X className="size-4" />
         <span className="sr-only">Fechar</span>
       </DialogPrimitive.Close>
